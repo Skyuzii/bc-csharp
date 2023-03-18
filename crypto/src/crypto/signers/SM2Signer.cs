@@ -55,10 +55,10 @@ namespace Org.BouncyCastle.Crypto.Signers
             ICipherParameters baseParam;
             byte[] userID;
 
-            if (parameters is ParametersWithID)
+            if (parameters is ParametersWithID withID)
             {
-                baseParam = ((ParametersWithID)parameters).Parameters;
-                userID = ((ParametersWithID)parameters).GetID();
+                baseParam = withID.Parameters;
+                userID = withID.GetID();
 
                 if (userID.Length >= 8192)
                     throw new ArgumentException("SM2 user ID must be less than 2^16 bits long");
@@ -72,20 +72,23 @@ namespace Org.BouncyCastle.Crypto.Signers
 
             if (forSigning)
             {
-                if (baseParam is ParametersWithRandom)
+                SecureRandom random = null;
+                if (baseParam is ParametersWithRandom rParam)
                 {
-                    ParametersWithRandom rParam = (ParametersWithRandom)baseParam;
-
                     ecKey = (ECKeyParameters)rParam.Parameters;
                     ecParams = ecKey.Parameters;
-                    kCalculator.Init(ecParams.N, rParam.Random);
+                    random = rParam.Random;
                 }
                 else
                 {
                     ecKey = (ECKeyParameters)baseParam;
                     ecParams = ecKey.Parameters;
-                    kCalculator.Init(ecParams.N, new SecureRandom());
                 }
+                if (!kCalculator.IsDeterministic)
+                {
+                    random = CryptoServicesRegistrar.GetSecureRandom(random);
+                }
+                kCalculator.Init(ecParams.N, random);
                 pubPoint = CreateBasePointMultiplier().Multiply(ecParams.G, ((ECPrivateKeyParameters)ecKey).D).Normalize();
             }
             else
@@ -118,29 +121,7 @@ namespace Org.BouncyCastle.Crypto.Signers
         }
 #endif
 
-        public virtual bool VerifySignature(byte[] signature)
-        {
-            try
-            {
-                BigInteger[] rs = encoding.Decode(ecParams.N, signature);
-
-                return VerifySignature(rs[0], rs[1]);
-            }
-            catch (Exception)
-            {
-            }
-
-            return false;
-        }
-
-        public virtual void Reset()
-        {
-            if (z != null)
-            {
-                digest.Reset();
-                digest.BlockUpdate(z, 0, z.Length);
-            }
-        }
+        public virtual int GetMaxSignatureSize() => encoding.GetMaxEncodingSize(ecParams.N);
 
         public virtual byte[] GenerateSignature()
         {
@@ -187,6 +168,30 @@ namespace Org.BouncyCastle.Crypto.Signers
             catch (Exception ex)
             {
                 throw new CryptoException("unable to encode signature: " + ex.Message, ex);
+            }
+        }
+
+        public virtual bool VerifySignature(byte[] signature)
+        {
+            try
+            {
+                BigInteger[] rs = encoding.Decode(ecParams.N, signature);
+
+                return VerifySignature(rs[0], rs[1]);
+            }
+            catch (Exception)
+            {
+            }
+
+            return false;
+        }
+
+        public virtual void Reset()
+        {
+            if (z != null)
+            {
+                digest.Reset();
+                digest.BlockUpdate(z, 0, z.Length);
             }
         }
 

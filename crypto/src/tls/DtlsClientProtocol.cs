@@ -69,12 +69,12 @@ namespace Org.BouncyCastle.Tls
             catch (TlsFatalAlert fatalAlert)
             {
                 AbortClientHandshake(state, recordLayer, fatalAlert.AlertDescription);
-                throw fatalAlert;
+                throw;
             }
-            catch (IOException e)
+            catch (IOException)
             {
                 AbortClientHandshake(state, recordLayer, AlertDescription.internal_error);
-                throw e;
+                throw;
             }
             catch (Exception e)
             {
@@ -173,7 +173,7 @@ namespace Org.BouncyCastle.Tls
                 recordLayer.InitHeartbeat(state.heartbeat,
                     HeartbeatMode.peer_allowed_to_send == state.heartbeatPolicy);
 
-                return new DtlsTransport(recordLayer);
+                return new DtlsTransport(recordLayer, state.client.IgnoreCorruptDtlsRecords);
             }
 
             InvalidateSession(state);
@@ -392,7 +392,7 @@ namespace Org.BouncyCastle.Tls
 
             recordLayer.InitHeartbeat(state.heartbeat, HeartbeatMode.peer_allowed_to_send == state.heartbeatPolicy);
 
-            return new DtlsTransport(recordLayer);
+            return new DtlsTransport(recordLayer, state.client.IgnoreCorruptDtlsRecords);
         }
 
         /// <exception cref="IOException"/>
@@ -579,6 +579,10 @@ namespace Org.BouncyCastle.Tls
             TlsProtocol.AssertEmpty(buf);
 
             state.certificateRequest = TlsUtilities.ValidateCertificateRequest(certificateRequest, state.keyExchange);
+
+            state.clientContext.SecurityParameters.m_clientCertificateType =
+                TlsExtensionsUtilities.GetClientCertificateTypeExtensionServer(state.serverExtensions,
+                    CertificateType.X509);
         }
 
         /// <exception cref="IOException"/>
@@ -633,7 +637,7 @@ namespace Org.BouncyCastle.Tls
         protected virtual void ProcessServerCertificate(ClientHandshakeState state, byte[] body)
         {
             state.authentication = TlsUtilities.ReceiveServerCertificate(state.clientContext, state.client,
-                new MemoryStream(body, false));
+                new MemoryStream(body, false), state.serverExtensions);
         }
 
         /// <exception cref="IOException"/>
@@ -801,7 +805,7 @@ namespace Org.BouncyCastle.Tls
                      */
                     securityParameters.m_secureRenegotiation = true;
 
-                    if (!Arrays.ConstantTimeAreEqual(renegExtData,
+                    if (!Arrays.FixedTimeEquals(renegExtData,
                         TlsProtocol.CreateRenegotiationInfo(TlsUtilities.EmptyBytes)))
                     {
                         throw new TlsFatalAlert(AlertDescription.handshake_failure);

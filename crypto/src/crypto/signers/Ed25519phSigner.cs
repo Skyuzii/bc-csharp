@@ -1,9 +1,7 @@
 ﻿using System;
-using System.IO;
 
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math.EC.Rfc8032;
-using Org.BouncyCastle.Utilities;
 
 namespace Org.BouncyCastle.Crypto.Signers
 {
@@ -19,7 +17,10 @@ namespace Org.BouncyCastle.Crypto.Signers
 
         public Ed25519phSigner(byte[] context)
         {
-            this.context = Arrays.Clone(context);
+            if (null == context)
+                throw new ArgumentNullException(nameof(context));
+
+            this.context = (byte[])context.Clone();
         }
 
         public virtual string AlgorithmName
@@ -62,6 +63,8 @@ namespace Org.BouncyCastle.Crypto.Signers
         }
 #endif
 
+        public virtual int GetMaxSignatureSize() => Ed25519.SignatureSize;
+
         public virtual byte[] GenerateSignature()
         {
             if (!forSigning || null == privateKey)
@@ -69,7 +72,7 @@ namespace Org.BouncyCastle.Crypto.Signers
 
             byte[] msg = new byte[Ed25519.PrehashSize];
             if (Ed25519.PrehashSize != prehash.DoFinal(msg, 0))
-                throw new InvalidOperationException("Prehash digest failed");
+                throw new InvalidOperationException("Prehash calculation failed");
 
             byte[] signature = new byte[Ed25519PrivateKeyParameters.SignatureSize];
             privateKey.Sign(Ed25519.Algorithm.Ed25519ph, context, msg, 0, Ed25519.PrehashSize, signature, 0);
@@ -86,8 +89,11 @@ namespace Org.BouncyCastle.Crypto.Signers
                 return false;
             }
 
-            byte[] pk = publicKey.GetEncoded();
-            return Ed25519.VerifyPrehash(signature, 0, pk, 0, context, prehash);
+            byte[] msg = new byte[Ed25519.PrehashSize];
+            if (Ed25519.PrehashSize != prehash.DoFinal(msg, 0))
+                throw new InvalidOperationException("Prehash calculation failed");
+
+            return publicKey.Verify(Ed25519.Algorithm.Ed25519ph, context, msg, 0, Ed25519.PrehashSize, signature, 0);
         }
 
         public void Reset()

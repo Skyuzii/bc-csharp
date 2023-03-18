@@ -24,7 +24,7 @@ namespace Org.BouncyCastle.Crypto.Digests
             0x8000000080008081UL, 0x8000000000008080UL, 0x0000000080000001UL, 0x8000000080008008UL
         };
 
-        private ulong[] state = new ulong[25];
+        private readonly ulong[] state = new ulong[25];
         protected byte[] dataQueue = new byte[192];
         protected int rate;
         protected int bitsInQueue;
@@ -176,7 +176,11 @@ namespace Org.BouncyCastle.Crypto.Digests
             dataQueue[bitsInQueue >> 3] = data;
             if ((bitsInQueue += 8) == rate)
             {
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+                KeccakAbsorb(dataQueue);
+#else
                 KeccakAbsorb(dataQueue, 0);
+#endif
                 bitsInQueue = 0;
             }
         }
@@ -204,13 +208,21 @@ namespace Org.BouncyCastle.Crypto.Digests
             {
                 Array.Copy(data, off, dataQueue, bytesInQueue, available);
                 count += available;
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+                KeccakAbsorb(dataQueue);
+#else
                 KeccakAbsorb(dataQueue, 0);
+#endif
             }
 
             int remaining;
             while ((remaining = (len - count)) >= rateBytes)
             {
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+                KeccakAbsorb(data.AsSpan(off + count));
+#else
                 KeccakAbsorb(data, off + count);
+#endif
                 count += rateBytes;
             }
 
@@ -243,7 +255,7 @@ namespace Org.BouncyCastle.Crypto.Digests
             {
                 data[..available].CopyTo(dataQueue.AsSpan(bytesInQueue));
                 count += available;
-                KeccakAbsorb(dataQueue, 0);
+                KeccakAbsorb(dataQueue);
             }
 
             int remaining;
@@ -282,7 +294,11 @@ namespace Org.BouncyCastle.Crypto.Digests
 
             if (++bitsInQueue == rate)
             {
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+                KeccakAbsorb(dataQueue);
+#else
                 KeccakAbsorb(dataQueue, 0);
+#endif
             }
             else
             {
@@ -353,18 +369,6 @@ namespace Org.BouncyCastle.Crypto.Digests
         }
 #endif
 
-        private void KeccakAbsorb(byte[] data, int off)
-        {
-            int count = rate >> 6;
-            for (int i = 0; i < count; ++i)
-            {
-                state[i] ^= Pack.LE_To_UInt64(data, off);
-                off += 8;
-            }
-
-            KeccakPermutation();
-        }
-
 #if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
         private void KeccakAbsorb(ReadOnlySpan<byte> data)
         {
@@ -375,22 +379,38 @@ namespace Org.BouncyCastle.Crypto.Digests
                 off += 8;
             }
 
-            KeccakPermutation();
+            KeccakPermutation(state);
+        }
+#else
+        private void KeccakAbsorb(byte[] data, int off)
+        {
+            int count = rate >> 6;
+            for (int i = 0; i < count; ++i)
+            {
+                state[i] ^= Pack.LE_To_UInt64(data, off);
+                off += 8;
+            }
+
+            KeccakPermutation(state);
         }
 #endif
 
         private void KeccakExtract()
         {
-            KeccakPermutation();
+            KeccakPermutation(state);
 
             Pack.UInt64_To_LE(state, 0, rate >> 6, dataQueue, 0);
 
             this.bitsInQueue = rate;
         }
 
-        private void KeccakPermutation()
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        internal static void KeccakPermutation(Span<ulong> A)
+#else
+        internal static void KeccakPermutation(ulong[] A)
+#endif
         {
-            ulong[] A = state;
+            var bounds = A[24];
 
             ulong a00 = A[ 0], a01 = A[ 1], a02 = A[ 2], a03 = A[ 3], a04 = A[ 4];
             ulong a05 = A[ 5], a06 = A[ 6], a07 = A[ 7], a08 = A[ 8], a09 = A[ 9];
@@ -407,11 +427,11 @@ namespace Org.BouncyCastle.Crypto.Digests
                 ulong c3 = a03 ^ a08 ^ a13 ^ a18 ^ a23;
                 ulong c4 = a04 ^ a09 ^ a14 ^ a19 ^ a24;
 
-                ulong d1 = (c1 << 1 | c1 >> -1) ^ c4;
-                ulong d2 = (c2 << 1 | c2 >> -1) ^ c0;
-                ulong d3 = (c3 << 1 | c3 >> -1) ^ c1;
-                ulong d4 = (c4 << 1 | c4 >> -1) ^ c2;
-                ulong d0 = (c0 << 1 | c0 >> -1) ^ c3;
+                ulong d1 = Longs.RotateLeft(c1, 1) ^ c4;
+                ulong d2 = Longs.RotateLeft(c2, 1) ^ c0;
+                ulong d3 = Longs.RotateLeft(c3, 1) ^ c1;
+                ulong d4 = Longs.RotateLeft(c4, 1) ^ c2;
+                ulong d0 = Longs.RotateLeft(c0, 1) ^ c3;
 
                 a00 ^= d1; a05 ^= d1; a10 ^= d1; a15 ^= d1; a20 ^= d1;
                 a01 ^= d2; a06 ^= d2; a11 ^= d2; a16 ^= d2; a21 ^= d2;
@@ -420,30 +440,30 @@ namespace Org.BouncyCastle.Crypto.Digests
                 a04 ^= d0; a09 ^= d0; a14 ^= d0; a19 ^= d0; a24 ^= d0;
 
                 // rho/pi
-                c1  = a01 <<  1 | a01 >> 63;
-                a01 = a06 << 44 | a06 >> 20;
-                a06 = a09 << 20 | a09 >> 44;
-                a09 = a22 << 61 | a22 >>  3;
-                a22 = a14 << 39 | a14 >> 25;
-                a14 = a20 << 18 | a20 >> 46;
-                a20 = a02 << 62 | a02 >>  2;
-                a02 = a12 << 43 | a12 >> 21;
-                a12 = a13 << 25 | a13 >> 39;
-                a13 = a19 <<  8 | a19 >> 56;
-                a19 = a23 << 56 | a23 >>  8;
-                a23 = a15 << 41 | a15 >> 23;
-                a15 = a04 << 27 | a04 >> 37;
-                a04 = a24 << 14 | a24 >> 50;
-                a24 = a21 <<  2 | a21 >> 62;
-                a21 = a08 << 55 | a08 >>  9;
-                a08 = a16 << 45 | a16 >> 19;
-                a16 = a05 << 36 | a05 >> 28;
-                a05 = a03 << 28 | a03 >> 36;
-                a03 = a18 << 21 | a18 >> 43;
-                a18 = a17 << 15 | a17 >> 49;
-                a17 = a11 << 10 | a11 >> 54;
-                a11 = a07 <<  6 | a07 >> 58;
-                a07 = a10 <<  3 | a10 >> 61;
+                c1  = Longs.RotateLeft(a01,  1);
+                a01 = Longs.RotateLeft(a06, 44);
+                a06 = Longs.RotateLeft(a09, 20);
+                a09 = Longs.RotateLeft(a22, 61);
+                a22 = Longs.RotateLeft(a14, 39);
+                a14 = Longs.RotateLeft(a20, 18);
+                a20 = Longs.RotateLeft(a02, 62);
+                a02 = Longs.RotateLeft(a12, 43);
+                a12 = Longs.RotateLeft(a13, 25);
+                a13 = Longs.RotateLeft(a19,  8);
+                a19 = Longs.RotateLeft(a23, 56);
+                a23 = Longs.RotateLeft(a15, 41);
+                a15 = Longs.RotateLeft(a04, 27);
+                a04 = Longs.RotateLeft(a24, 14);
+                a24 = Longs.RotateLeft(a21,  2);
+                a21 = Longs.RotateLeft(a08, 55);
+                a08 = Longs.RotateLeft(a16, 45);
+                a16 = Longs.RotateLeft(a05, 36);
+                a05 = Longs.RotateLeft(a03, 28);
+                a03 = Longs.RotateLeft(a18, 21);
+                a18 = Longs.RotateLeft(a17, 15);
+                a17 = Longs.RotateLeft(a11, 10);
+                a11 = Longs.RotateLeft(a07,  6);
+                a07 = Longs.RotateLeft(a10,  3);
                 a10 = c1;
 
                 // chi

@@ -114,9 +114,7 @@ namespace Org.BouncyCastle.X509
 				if (sData != null)
 				{
 					if (sDataObjectCount != sData.Count)
-					{
 						return GetCertificate();
-					}
 
 					sData = null;
 					sDataObjectCount = 0;
@@ -139,11 +137,13 @@ namespace Org.BouncyCastle.X509
                 }
 
                 if (tag != 0x30)  // assume ascii PEM encoded.
-				{
 					return ReadPemCertificate(inStream);
-				}
 
 				return ReadDerCertificate(new Asn1InputStream(inStream));
+			}
+			catch (CertificateException)
+			{
+				throw;
 			}
 			catch (Exception e)
 			{

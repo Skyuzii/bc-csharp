@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace Org.BouncyCastle.Utilities
 {
-    internal abstract class Platform
+    internal static class Platform
     {
         private static readonly CompareInfo InvariantCompareInfo = CultureInfo.InvariantCulture.CompareInfo;
 
@@ -26,14 +26,24 @@ namespace Org.BouncyCastle.Utilities
             }
         }
 
-        internal static void Dispose(IDisposable d)
+        internal static int IndexOf(string source, char value)
         {
-            d.Dispose();
+            return InvariantCompareInfo.IndexOf(source, value, CompareOptions.Ordinal);
         }
 
         internal static int IndexOf(string source, string value)
         {
             return InvariantCompareInfo.IndexOf(source, value, CompareOptions.Ordinal);
+        }
+
+        internal static int IndexOf(string source, char value, int startIndex)
+        {
+            return InvariantCompareInfo.IndexOf(source, value, startIndex, CompareOptions.Ordinal);
+        }
+
+        internal static int IndexOf(string source, string value, int startIndex)
+        {
+            return InvariantCompareInfo.IndexOf(source, value, startIndex, CompareOptions.Ordinal);
         }
 
         internal static int LastIndexOf(string source, string value)
@@ -46,6 +56,11 @@ namespace Org.BouncyCastle.Utilities
             return InvariantCompareInfo.IsPrefix(source, prefix, CompareOptions.Ordinal);
         }
 
+        internal static bool StartsWithIgnoreCase(string source, string prefix)
+        {
+            return InvariantCompareInfo.IsPrefix(source, prefix, CompareOptions.OrdinalIgnoreCase);
+        }
+
         internal static bool EndsWith(string source, string suffix)
         {
             return InvariantCompareInfo.IsSuffix(source, suffix, CompareOptions.Ordinal);
@@ -53,7 +68,12 @@ namespace Org.BouncyCastle.Utilities
 
         internal static string GetTypeName(object obj)
         {
-            return obj.GetType().FullName;
+            return GetTypeName(obj.GetType());
+        }
+
+        internal static string GetTypeName(Type t)
+        {
+            return t.FullName;
         }
     }
 }

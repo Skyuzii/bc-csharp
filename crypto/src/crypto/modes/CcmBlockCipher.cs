@@ -166,10 +166,10 @@ namespace Org.BouncyCastle.Crypto.Modes
 #if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
         public virtual int DoFinal(Span<byte> output)
         {
-            byte[] input = data.GetBuffer();
-            int inLen = Convert.ToInt32(data.Length);
+            if (!data.TryGetBuffer(out var buffer))
+                throw new UnauthorizedAccessException();
 
-            int len = ProcessPacket(input.AsSpan(0, inLen), output);
+            int len = ProcessPacket(buffer, output);
 
             Reset();
 
@@ -223,6 +223,8 @@ namespace Org.BouncyCastle.Crypto.Modes
          */
         public virtual byte[] ProcessPacket(byte[] input, int inOff, int inLen)
         {
+            Check.DataLength(input, inOff, inLen, "input buffer too short");
+
             byte[] output;
 
             if (forEncryption)
@@ -257,6 +259,11 @@ namespace Org.BouncyCastle.Crypto.Modes
          */
         public virtual int ProcessPacket(byte[] input, int inOff, int inLen, byte[] output, int outOff)
         {
+            Check.DataLength(input, inOff, inLen, "input buffer too short");
+
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            return ProcessPacket(input.AsSpan(inOff, inLen), output.AsSpan(outOff));
+#else
             // TODO: handle null keyParam (e.g. via RepeatedKeySpec)
             // Need to keep the CTR and CBC Mac parts around and reset
             if (keyParam == null)
@@ -275,7 +282,7 @@ namespace Org.BouncyCastle.Crypto.Modes
             iv[0] = (byte)((q - 1) & 0x7);
             nonce.CopyTo(iv, 1);
 
-            IBlockCipher ctrCipher = new SicBlockCipher(cipher);
+            var ctrCipher = new SicBlockCipher(cipher);
             ctrCipher.Init(forEncryption, new ParametersWithIV(keyParam, iv));
 
             int outputLen;
@@ -345,11 +352,12 @@ namespace Org.BouncyCastle.Crypto.Modes
 
                 CalculateMac(output, outOff, outputLen, calculatedMacBlock);
 
-                if (!Arrays.ConstantTimeAreEqual(macBlock, calculatedMacBlock))
+                if (!Arrays.FixedTimeEquals(macBlock, calculatedMacBlock))
                     throw new InvalidCipherTextException("mac check in CCM failed");
             }
 
             return outputLen;
+#endif
         }
 
 #if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
@@ -375,7 +383,7 @@ namespace Org.BouncyCastle.Crypto.Modes
             iv[0] = (byte)((q - 1) & 0x7);
             nonce.CopyTo(iv, 1);
 
-            IBlockCipher ctrCipher = new SicBlockCipher(cipher);
+            var ctrCipher = new SicBlockCipher(cipher);
             ctrCipher.Init(forEncryption, new ParametersWithIV(keyParam, iv));
 
             int outputLen;
@@ -439,7 +447,7 @@ namespace Org.BouncyCastle.Crypto.Modes
 
                 CalculateMac(output[..outputLen], calculatedMacBlock);
 
-                if (!Arrays.ConstantTimeAreEqual(macBlock, calculatedMacBlock))
+                if (!Arrays.FixedTimeEquals(macBlock, calculatedMacBlock))
                     throw new InvalidCipherTextException("mac check in CCM failed");
             }
 
@@ -452,8 +460,7 @@ namespace Org.BouncyCastle.Crypto.Modes
 #if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
             return CalculateMac(data.AsSpan(dataOff, dataLen), macBlock);
 #else
-            IMac cMac = new CbcBlockCipherMac(cipher, macSize * 8);
-
+            var cMac = new CbcBlockCipherMac(cipher, macSize * 8);
             cMac.Init(keyParam);
 
             //
@@ -544,8 +551,7 @@ namespace Org.BouncyCastle.Crypto.Modes
 #if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
         private int CalculateMac(ReadOnlySpan<byte> data, Span<byte> macBlock)
         {
-            IMac cMac = new CbcBlockCipherMac(cipher, macSize * 8);
-
+            var cMac = new CbcBlockCipherMac(cipher, macSize * 8);
             cMac.Init(keyParam);
 
             //

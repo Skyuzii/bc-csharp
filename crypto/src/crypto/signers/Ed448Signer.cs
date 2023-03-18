@@ -3,7 +3,6 @@ using System.IO;
 
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math.EC.Rfc8032;
-using Org.BouncyCastle.Utilities;
 
 namespace Org.BouncyCastle.Crypto.Signers
 {
@@ -19,7 +18,10 @@ namespace Org.BouncyCastle.Crypto.Signers
 
         public Ed448Signer(byte[] context)
         {
-            this.context = Arrays.Clone(context);
+            if (null == context)
+                throw new ArgumentNullException(nameof(context));
+
+            this.context = (byte[])context.Clone();
         }
 
         public virtual string AlgorithmName
@@ -62,6 +64,8 @@ namespace Org.BouncyCastle.Crypto.Signers
         }
 #endif
 
+        public virtual int GetMaxSignatureSize() => Ed448.SignatureSize;
+
         public virtual byte[] GenerateSignature()
         {
             if (!forSigning || null == privateKey)
@@ -83,7 +87,7 @@ namespace Org.BouncyCastle.Crypto.Signers
             buffer.Reset();
         }
 
-        private class Buffer : MemoryStream
+        private sealed class Buffer : MemoryStream
         {
             internal byte[] GenerateSignature(Ed448PrivateKeyParameters privateKey, byte[] ctx)
             {
@@ -112,8 +116,7 @@ namespace Org.BouncyCastle.Crypto.Signers
                     byte[] buf = GetBuffer();
                     int count = Convert.ToInt32(Length);
 
-                    byte[] pk = publicKey.GetEncoded();
-                    bool result = Ed448.Verify(signature, 0, pk, 0, ctx, buf, 0, count);
+                    bool result = publicKey.Verify(Ed448.Algorithm.Ed448, ctx, buf, 0, count, signature, 0);
                     Reset();
                     return result;
                 }

@@ -1,20 +1,17 @@
-﻿using System;
-
-namespace Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium
+﻿namespace Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium
 {
     internal class PolyVecL
     {
-        public Poly[] Vec;
-        private DilithiumEngine Engine;
-        private int Mode;
-        private int PolyVecBytes;
-        private int L;
-        private int K;
+        public readonly Poly[] Vec;
+        //private DilithiumEngine Engine;
+        //private int Mode;
+        private readonly int L;
+        private readonly int K;
 
         public PolyVecL(DilithiumEngine Engine)
         {
-            this.Engine = Engine;
-            Mode = Engine.Mode;
+            //this.Engine = Engine;
+            //Mode = Engine.Mode;
             L = Engine.L;
             K = Engine.K;
             Vec = new Poly[L];
@@ -26,8 +23,7 @@ namespace Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium
 
         public void UniformEta(byte[] seed, ushort nonce)
         {
-            int i;
-            for (i = 0; i < L; i++)
+            for (int i = 0; i < L; i++)
             {
                 Vec[i].UniformEta(seed, nonce++);
             }

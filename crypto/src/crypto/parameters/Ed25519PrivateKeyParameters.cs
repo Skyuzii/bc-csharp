@@ -35,6 +35,17 @@ namespace Org.BouncyCastle.Crypto.Parameters
             Array.Copy(buf, off, data, 0, KeySize);
         }
 
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public Ed25519PrivateKeyParameters(ReadOnlySpan<byte> buf)
+            : base(true)
+        {
+            if (buf.Length != KeySize)
+                throw new ArgumentException("must have length " + KeySize, nameof(buf));
+
+            buf.CopyTo(data);
+        }
+#endif
+
         public Ed25519PrivateKeyParameters(Stream input)
             : base(true)
         {
@@ -47,6 +58,13 @@ namespace Org.BouncyCastle.Crypto.Parameters
             Array.Copy(data, 0, buf, off, KeySize);
         }
 
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public void Encode(Span<byte> buf)
+        {
+            data.CopyTo(buf);
+        }
+#endif
+
         public byte[] GetEncoded()
         {
             return Arrays.Clone(data);
@@ -58,9 +76,11 @@ namespace Org.BouncyCastle.Crypto.Parameters
             {
                 if (null == cachedPublicKey)
                 {
-                    byte[] publicKey = new byte[Ed25519.PublicKeySize];
-                    Ed25519.GeneratePublicKey(data, 0, publicKey, 0);
-                    cachedPublicKey = new Ed25519PublicKeyParameters(publicKey, 0);
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+                    cachedPublicKey = new Ed25519PublicKeyParameters(Ed25519.GeneratePublicKey(data));
+#else
+                    cachedPublicKey = new Ed25519PublicKeyParameters(Ed25519.GeneratePublicKey(data, 0));
+#endif
                 }
 
                 return cachedPublicKey;
@@ -80,27 +100,36 @@ namespace Org.BouncyCastle.Crypto.Parameters
             case Ed25519.Algorithm.Ed25519:
             {
                 if (null != ctx)
-                    throw new ArgumentException("ctx");
+                    throw new ArgumentOutOfRangeException(nameof(ctx));
 
                 Ed25519.Sign(data, 0, pk, 0, msg, msgOff, msgLen, sig, sigOff);
                 break;
             }
             case Ed25519.Algorithm.Ed25519ctx:
             {
+                if (null == ctx)
+                    throw new ArgumentNullException(nameof(ctx));
+                if (ctx.Length > 255)
+                    throw new ArgumentOutOfRangeException(nameof(ctx));
+
                 Ed25519.Sign(data, 0, pk, 0, ctx, msg, msgOff, msgLen, sig, sigOff);
                 break;
             }
             case Ed25519.Algorithm.Ed25519ph:
             {
+                if (null == ctx)
+                    throw new ArgumentNullException(nameof(ctx));
+                if (ctx.Length > 255)
+                    throw new ArgumentOutOfRangeException(nameof(ctx));
                 if (Ed25519.PrehashSize != msgLen)
-                    throw new ArgumentException("msgLen");
+                    throw new ArgumentOutOfRangeException(nameof(msgLen));
 
                 Ed25519.SignPrehash(data, 0, pk, 0, ctx, msg, msgOff, sig, sigOff);
                 break;
             }
             default:
             {
-                throw new ArgumentException("algorithm");
+                throw new ArgumentOutOfRangeException(nameof(algorithm));
             }
             }
         }
@@ -108,7 +137,7 @@ namespace Org.BouncyCastle.Crypto.Parameters
         private static byte[] Validate(byte[] buf)
         {
             if (buf.Length != KeySize)
-                throw new ArgumentException("must have length " + KeySize, "buf");
+                throw new ArgumentException("must have length " + KeySize, nameof(buf));
 
             return buf;
         }

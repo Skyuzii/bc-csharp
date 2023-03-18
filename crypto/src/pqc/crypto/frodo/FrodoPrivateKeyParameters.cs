@@ -1,20 +1,21 @@
-
-
 using Org.BouncyCastle.Utilities;
 
 namespace Org.BouncyCastle.Pqc.Crypto.Frodo
 {
-    public class FrodoPrivateKeyParameters
+    public sealed class FrodoPrivateKeyParameters
         : FrodoKeyParameters
     {
-        private byte[] privateKey;
-
-        public byte[] PrivateKey => Arrays.Clone(privateKey);
+        internal byte[] privateKey;
 
         public FrodoPrivateKeyParameters(FrodoParameters parameters, byte[] privateKey)
             : base(true, parameters)
         {
             this.privateKey = Arrays.Clone(privateKey);
+        }
+
+        public byte[] GetPrivateKey()
+        {
+            return Arrays.Clone(privateKey);
         }
 
         public byte[] GetEncoded()

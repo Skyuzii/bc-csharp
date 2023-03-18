@@ -7,7 +7,6 @@ using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Security.Certificates;
-using Org.BouncyCastle.Utilities;
 
 namespace Org.BouncyCastle.X509
 {
@@ -79,7 +78,8 @@ namespace Org.BouncyCastle.X509
 			int			reason,
 			DateTime	invalidityDate)
 		{
-			tbsGen.AddCrlEntry(new DerInteger(userCertificate), new Time(revocationDate), reason, new DerGeneralizedTime(invalidityDate));
+			tbsGen.AddCrlEntry(new DerInteger(userCertificate), new Time(revocationDate), reason,
+				new Asn1GeneralizedTime(invalidityDate));
 		}
 
 		/**
@@ -186,13 +186,13 @@ namespace Org.BouncyCastle.X509
 
 			TbsCertificateList tbsCertList = tbsGen.GenerateTbsCertList();
 
-            IStreamCalculator streamCalculator = signatureFactory.CreateCalculator();
-			using (Stream sigStream = streamCalculator.Stream)
+            IStreamCalculator<IBlockResult> streamCalculator = signatureFactory.CreateCalculator();
+			using (var sigStream = streamCalculator.Stream)
 			{
 				tbsCertList.EncodeTo(sigStream, Asn1Encodable.Der);
 			}
 
-			var signature = ((IBlockResult)streamCalculator.GetResult()).Collect();
+			var signature = streamCalculator.GetResult().Collect();
 
 			return new X509Crl(
 				CertificateList.GetInstance(new DerSequence(tbsCertList, sigAlgID, new DerBitString(signature))));

@@ -4,7 +4,7 @@ using System.Text;
 namespace Org.BouncyCastle.Utilities
 {
     /// <summary> General string utilities.</summary>
-    public abstract class Strings
+    public static class Strings
     {
         internal static bool IsOneOf(string s, params string[] candidates)
         {
@@ -18,12 +18,22 @@ namespace Org.BouncyCastle.Utilities
 
         public static string FromByteArray(byte[] bs)
         {
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            return string.Create(bs.Length, bs, (chars, bytes) =>
+            {
+                for (int i = 0; i < chars.Length; ++i)
+                {
+                    chars[i] = Convert.ToChar(bytes[i]);
+                }
+            });
+#else
             char[] cs = new char[bs.Length];
             for (int i = 0; i < cs.Length; ++i)
             {
                 cs[i] = Convert.ToChar(bs[i]);
             }
             return new string(cs);
+#endif
         }
 
         public static byte[] ToByteArray(char[] cs)
@@ -46,6 +56,18 @@ namespace Org.BouncyCastle.Utilities
             return bs;
         }
 
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public static byte[] ToByteArray(ReadOnlySpan<char> cs)
+        {
+            byte[] bs = new byte[cs.Length];
+            for (int i = 0; i < bs.Length; ++i)
+            {
+                bs[i] = Convert.ToByte(cs[i]);
+            }
+            return bs;
+        }
+#endif
+
         public static string FromAsciiByteArray(byte[] bytes)
         {
             return Encoding.ASCII.GetString(bytes);
@@ -66,6 +88,11 @@ namespace Org.BouncyCastle.Utilities
             return Encoding.UTF8.GetString(bytes);
         }
 
+        public static string FromUtf8ByteArray(byte[] bytes, int index, int count)
+        {
+            return Encoding.UTF8.GetString(bytes, index, count);
+        }
+
         public static byte[] ToUtf8ByteArray(char[] cs)
         {
             return Encoding.UTF8.GetBytes(cs);
@@ -75,5 +102,15 @@ namespace Org.BouncyCastle.Utilities
         {
             return Encoding.UTF8.GetBytes(s);
         }
+
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public static byte[] ToUtf8ByteArray(ReadOnlySpan<char> cs)
+        {
+            int count = Encoding.UTF8.GetByteCount(cs);
+            byte[] bytes = new byte[count];
+            Encoding.UTF8.GetBytes(cs, bytes);
+            return bytes;
+        }
+#endif
     }
 }

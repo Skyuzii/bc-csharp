@@ -29,7 +29,7 @@ namespace Org.BouncyCastle.OpenSsl
     * Certificates will be returned using the appropriate java.security type.</p>
     */
     public class PemReader
-        : Org.BouncyCastle.Utilities.IO.Pem.PemReader
+        : Utilities.IO.Pem.PemReader
     {
         //private static readonly Dictionary<string, PemObjectParser> Parsers = new Dictionary<string, PemObjectParser>();
 
@@ -356,9 +356,9 @@ namespace Org.BouncyCastle.OpenSsl
 
                 return new AsymmetricCipherKeyPair(pubSpec, privSpec);
             }
-            catch (IOException e)
+            catch (IOException)
             {
-                throw e;
+                throw;
             }
             catch (Exception e)
             {
@@ -367,23 +367,17 @@ namespace Org.BouncyCastle.OpenSsl
             }
         }
 
-        // TODO Add an equivalent class for ECNamedCurveParameterSpec?
-        //private ECNamedCurveParameterSpec ReadECParameters(
-//		private X9ECParameters ReadECParameters(PemObject pemObject)
-//		{
-//			DerObjectIdentifier oid = (DerObjectIdentifier)Asn1Object.FromByteArray(pemObject.Content);
-//
-//			//return ECNamedCurveTable.getParameterSpec(oid.Id);
-//			return GetCurveParameters(oid.Id);
-//		}
+        //private X9ECParameters ReadECParameters(PemObject pemObject)
+        //{
+        //    DerObjectIdentifier oid = (DerObjectIdentifier)Asn1Object.FromByteArray(pemObject.Content);
 
-        private static X9ECParameters GetCurveParameters(string name)
-        {
-            X9ECParameters ecP = ECKeyPairGenerator.FindECCurveByName(name);
-            if (ecP == null)
-                throw new Exception("unknown curve name: " + name);
+        //    //return ECNamedCurveTable.getParameterSpec(oid.Id);
+        //    return GetCurveParameters(oid.Id);
+        //}
 
-            return ecP;
-        }
+        //private static X9ECParameters GetCurveParameters(string name)
+        //{
+        //    return ECKeyPairGenerator.FindECCurveByName(name) ?? throw new Exception("unknown curve name: " + name);
+        //}
     }
 }

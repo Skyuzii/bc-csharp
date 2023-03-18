@@ -38,22 +38,23 @@ namespace Org.BouncyCastle.Asn1
 		 */
 		public static DerBitString GetInstance(object obj)
 		{
-			if (obj == null || obj is DerBitString)
-			{
-				return (DerBitString)obj;
-			}
-            //else if (obj is Asn1BitStringParser)
-            else if (obj is IAsn1Convertible)
+            if (obj == null)
+                return null;
+
+			if (obj is DerBitString derBitString)
+				return derBitString;
+
+            if (obj is IAsn1Convertible asn1Convertible)
             {
-                Asn1Object asn1Object = ((IAsn1Convertible)obj).ToAsn1Object();
-                if (asn1Object is DerBitString)
-                    return (DerBitString)asn1Object;
+                Asn1Object asn1Object = asn1Convertible.ToAsn1Object();
+                if (asn1Object is DerBitString converted)
+                    return converted;
             }
-            else if (obj is byte[])
+            else if (obj is byte[] bytes)
             {
                 try
                 {
-                    return GetInstance(FromByteArray((byte[])obj));
+                    return GetInstance(FromByteArray(bytes));
                 }
                 catch (IOException e)
                 {
@@ -263,6 +264,38 @@ namespace Org.BouncyCastle.Asn1
             }
 
             return new PrimitiveEncoding(tagClass, tagNo, contents);
+        }
+
+        internal sealed override DerEncoding GetEncodingDer()
+        {
+            int padBits = contents[0];
+            if (padBits != 0)
+            {
+                int last = contents.Length - 1;
+                byte lastBer = contents[last];
+                byte lastDer = (byte)(lastBer & (0xFF << padBits));
+
+                if (lastBer != lastDer)
+                    return new PrimitiveDerEncodingSuffixed(Asn1Tags.Universal, Asn1Tags.BitString, contents, lastDer);
+            }
+
+            return new PrimitiveDerEncoding(Asn1Tags.Universal, Asn1Tags.BitString, contents);
+        }
+
+        internal sealed override DerEncoding GetEncodingDerImplicit(int tagClass, int tagNo)
+        {
+            int padBits = contents[0];
+            if (padBits != 0)
+            {
+                int last = contents.Length - 1;
+                byte lastBer = contents[last];
+                byte lastDer = (byte)(lastBer & (0xFF << padBits));
+
+                if (lastBer != lastDer)
+                    return new PrimitiveDerEncodingSuffixed(tagClass, tagNo, contents, lastDer);
+            }
+
+            return new PrimitiveDerEncoding(tagClass, tagNo, contents);
         }
 
         protected override int Asn1GetHashCode()

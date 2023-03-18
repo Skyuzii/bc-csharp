@@ -28,6 +28,17 @@ namespace Org.BouncyCastle.Crypto.Signers
         private byte[]      block;
 
         /**
+         * Constructor for a signer with an explicit digest trailer.
+         *
+         * @param cipher cipher to use.
+         * @param digest digest to sign with.
+         */
+        public X931Signer(IAsymmetricBlockCipher cipher, IDigest digest)
+            : this(cipher, digest, false)
+        {
+        }
+
+        /**
          * Generate a signer with either implicit or explicit trailers for X9.31.
          *
          * @param cipher base cipher to use for signature creation/verification
@@ -58,34 +69,24 @@ namespace Org.BouncyCastle.Crypto.Signers
             get { return digest.AlgorithmName + "with" + cipher.AlgorithmName + "/X9.31"; }
         }
 
-        /**
-         * Constructor for a signer with an explicit digest trailer.
-         *
-         * @param cipher cipher to use.
-         * @param digest digest to sign with.
-         */
-        public X931Signer(IAsymmetricBlockCipher cipher, IDigest digest)
-            :   this(cipher, digest, false)
-        {
-        }
-
         public virtual void Init(bool forSigning, ICipherParameters parameters)
         {
-            kParam = (RsaKeyParameters)parameters;
+            if (parameters is ParametersWithRandom withRandom)
+            {
+                kParam = (RsaKeyParameters)withRandom.Parameters;
+            }
+            else
+            {
+                kParam = (RsaKeyParameters)parameters;
+            }
 
-            cipher.Init(forSigning, kParam);
+            cipher.Init(forSigning, parameters);
 
             keyBits = kParam.Modulus.BitLength;
 
             block = new byte[(keyBits + 7) / 8];
 
             Reset();
-        }
-
-        /// <summary> clear possible sensitive data</summary>
-        private void ClearBlock(byte[] block)
-        {
-            Array.Clear(block, 0, block.Length);
         }
 
         public virtual void Update(byte b)
@@ -105,49 +106,19 @@ namespace Org.BouncyCastle.Crypto.Signers
         }
 #endif
 
-        public virtual void Reset()
-        {
-            digest.Reset();
-        }
+        public virtual int GetMaxSignatureSize() => BigIntegers.GetUnsignedByteLength(kParam.Modulus);
 
         public virtual byte[] GenerateSignature()
         {
             CreateSignatureBlock();
 
             BigInteger t = new BigInteger(1, cipher.ProcessBlock(block, 0, block.Length));
-            ClearBlock(block);
+            Arrays.Fill(block, 0x00);
 
             t = t.Min(kParam.Modulus.Subtract(t));
 
             int size = BigIntegers.GetUnsignedByteLength(kParam.Modulus);
             return BigIntegers.AsUnsignedByteArray(size, t);
-        }
-
-        private void CreateSignatureBlock()
-        {
-            int digSize = digest.GetDigestSize();
-
-            int delta;
-            if (trailer == IsoTrailers.TRAILER_IMPLICIT)
-            {
-                delta = block.Length - digSize - 1;
-                digest.DoFinal(block, delta);
-                block[block.Length - 1] = (byte)IsoTrailers.TRAILER_IMPLICIT;
-            }
-            else
-            {
-                delta = block.Length - digSize - 2;
-                digest.DoFinal(block, delta);
-                block[block.Length - 2] = (byte)(trailer >> 8);
-                block[block.Length - 1] = (byte)trailer;
-            }
-
-            block[0] = 0x6b;
-            for (int i = delta - 2; i != 0; i--)
-            {
-                block[i] = (byte)0xbb;
-            }
-            block[delta - 1] = (byte)0xba;
         }
 
         public virtual bool VerifySignature(byte[] signature)
@@ -183,14 +154,54 @@ namespace Org.BouncyCastle.Crypto.Signers
 
             CreateSignatureBlock();
 
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            int fBlockSize = block.Length;
+            Span<byte> fBlock = fBlockSize <= 512
+                ? stackalloc byte[fBlockSize]
+                : new byte[fBlockSize];
+            BigIntegers.AsUnsignedByteArray(f, fBlock);
+#else
             byte[] fBlock = BigIntegers.AsUnsignedByteArray(block.Length, f);
+#endif
 
-            bool rv = Arrays.ConstantTimeAreEqual(block, fBlock);
+            bool rv = Arrays.FixedTimeEquals(block, fBlock);
 
-            ClearBlock(block);
-            ClearBlock(fBlock);
+            Arrays.Fill(block, 0x00);
+            Arrays.Fill<byte>(fBlock, 0x00);
 
             return rv;
+        }
+
+        public virtual void Reset()
+        {
+            digest.Reset();
+        }
+
+        private void CreateSignatureBlock()
+        {
+            int digSize = digest.GetDigestSize();
+
+            int delta;
+            if (trailer == IsoTrailers.TRAILER_IMPLICIT)
+            {
+                delta = block.Length - digSize - 1;
+                digest.DoFinal(block, delta);
+                block[block.Length - 1] = (byte)IsoTrailers.TRAILER_IMPLICIT;
+            }
+            else
+            {
+                delta = block.Length - digSize - 2;
+                digest.DoFinal(block, delta);
+                block[block.Length - 2] = (byte)(trailer >> 8);
+                block[block.Length - 1] = (byte)trailer;
+            }
+
+            block[0] = 0x6b;
+            for (int i = delta - 2; i != 0; i--)
+            {
+                block[i] = (byte)0xbb;
+            }
+            block[delta - 1] = (byte)0xba;
         }
     }
 }

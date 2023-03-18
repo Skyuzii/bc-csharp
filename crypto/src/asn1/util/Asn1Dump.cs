@@ -206,15 +206,15 @@ namespace Org.BouncyCastle.Asn1.Utilities
                 buf.Append(indent);
                 buf.AppendLine("VideotexString(" + videotexString.GetString() + ")");
             }
-            else if (obj is DerUtcTime utcTime)
+            else if (obj is Asn1UtcTime utcTime)
             {
                 buf.Append(indent);
                 buf.AppendLine("UTCTime(" + utcTime.TimeString + ")");
             }
-            else if (obj is DerGeneralizedTime generalizedTime)
+            else if (obj is Asn1GeneralizedTime generalizedTime)
             {
                 buf.Append(indent);
-                buf.AppendLine("GeneralizedTime(" + generalizedTime.GetTime() + ")");
+                buf.AppendLine("GeneralizedTime(" + generalizedTime.TimeString + ")");
             }
             else if (obj is DerEnumerated en)
             {
@@ -256,11 +256,13 @@ namespace Org.BouncyCastle.Asn1.Utilities
         /// <summary>Parse ASN.1 objects from input <see cref="Stream"/>, and write them to the output.</summary>
         public static void Dump(Stream input, TextWriter output)
         {
-            Asn1InputStream asn1InputStream = new Asn1InputStream(input);
-            Asn1Object asn1Object;
-            while ((asn1Object = asn1InputStream.ReadObject()) != null)
+            using (var asn1In = new Asn1InputStream(input, int.MaxValue, leaveOpen: true))
             {
-                output.Write(DumpAsString(asn1Object));
+                Asn1Object asn1Object;
+                while ((asn1Object = asn1In.ReadObject()) != null)
+                {
+                    output.Write(DumpAsString(asn1Object));
+                }
             }
         }
 

@@ -138,11 +138,17 @@ namespace Org.BouncyCastle.Asn1.Pkcs
 
         public static readonly DerObjectIdentifier IdAlg = IdSmime.Branch("3");
 
-        public static readonly DerObjectIdentifier IdAlgEsdh        = IdAlg.Branch("5");
-        public static readonly DerObjectIdentifier IdAlgCms3DesWrap = IdAlg.Branch("6");
-        public static readonly DerObjectIdentifier IdAlgCmsRC2Wrap  = IdAlg.Branch("7");
-        public static readonly DerObjectIdentifier IdAlgPwriKek     = IdAlg.Branch("9");
-        public static readonly DerObjectIdentifier IdAlgSsdh        = IdAlg.Branch("10");
+        public static readonly DerObjectIdentifier IdAlgEsdh            = IdAlg.Branch("5");
+        public static readonly DerObjectIdentifier IdAlgCms3DesWrap     = IdAlg.Branch("6");
+        public static readonly DerObjectIdentifier IdAlgCmsRC2Wrap      = IdAlg.Branch("7");
+        public static readonly DerObjectIdentifier IdAlgZlibCompress    = IdAlg.Branch("8");
+        public static readonly DerObjectIdentifier IdAlgPwriKek         = IdAlg.Branch("9");
+        public static readonly DerObjectIdentifier IdAlgSsdh            = IdAlg.Branch("10");
+
+        /** RFC 6211 -  id-aa-cmsAlgorithmProtect OBJECT IDENTIFIER ::= {
+iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1)
+pkcs9(9) 52 }  */
+        public static readonly DerObjectIdentifier id_aa_cmsAlgorithmProtect = new DerObjectIdentifier(Pkcs9 + ".52");
 
         /*
          * <pre>

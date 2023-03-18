@@ -102,18 +102,18 @@ namespace Org.BouncyCastle.Cms
 
 				if (_sAttr != null)
 				{
-            		_sig = Helper.GetSignatureInstance(signatureName);
-				}
-				else
+                    _sig = SignerUtilities.InitSigner(signatureName, true, key, outer.m_random);
+                }
+                else
 				{
 					// Note: Need to use raw signatures here since we have already calculated the digest
 					if (_encName.Equals("RSA"))
 					{
-						_sig = Helper.GetSignatureInstance("RSA");
-					}
-					else if (_encName.Equals("DSA"))
+                        _sig = SignerUtilities.InitSigner("RSA", true, key, outer.m_random);
+                    }
+                    else if (_encName.Equals("DSA"))
 					{
-						_sig = Helper.GetSignatureInstance("NONEwithDSA");
+                        _sig = SignerUtilities.InitSigner("NONEwithDSA", true, key, outer.m_random);
 					}
 					// TODO Add support for raw PSS
 //					else if (_encName.equals("RSAandMGF1"))
@@ -135,10 +135,8 @@ namespace Org.BouncyCastle.Cms
 					{
 						throw new SignatureException("algorithm: " + _encName + " not supported in base signatures.");
 					}
-				}
-
-				_sig.Init(true, new ParametersWithRandom(key, outer.rand));
-			}
+                }
+            }
 
 			public SignerInfo Generate(DerObjectIdentifier contentType, AlgorithmIdentifier digestAlgorithm,
         		byte[] calculatedDigest)
@@ -234,10 +232,9 @@ namespace Org.BouncyCastle.Cms
         }
 
 		/// <summary>Constructor allowing specific source of randomness</summary>
-		/// <param name="rand">Instance of <c>SecureRandom</c> to use.</param>
-		public CmsSignedDataStreamGenerator(
-			SecureRandom rand)
-			: base(rand)
+		/// <param name="random">Instance of <c>SecureRandom</c> to use.</param>
+		public CmsSignedDataStreamGenerator(SecureRandom random)
+			: base(random)
 		{
 		}
 
@@ -559,7 +556,7 @@ namespace Org.BouncyCastle.Cms
 
             sigGen.AddObject(CalculateVersion(contentTypeOid));
 
-			Asn1EncodableVector digestAlgs = new Asn1EncodableVector();
+			Asn1EncodableVector digestAlgs = new Asn1EncodableVector(_messageDigestOids.Count);
 
 			foreach (string digestOid in _messageDigestOids)
             {
@@ -571,18 +568,23 @@ namespace Org.BouncyCastle.Cms
 			BerSequenceGenerator eiGen = new BerSequenceGenerator(sigGen.GetRawOutputStream());
             eiGen.AddObject(contentTypeOid);
 
-        	// If encapsulating, add the data as an octet string in the sequence
-			Stream encapStream = encapsulate
-				?	CmsUtilities.CreateBerOctetOutputStream(eiGen.GetRawOutputStream(), 0, true, _bufferSize)
-				:	null;
+			BerOctetStringGenerator octGen = null;
+			Stream encapStream = null;
 
-        	// Also send the data to 'dataOutputStream' if necessary
-			Stream teeStream = GetSafeTeeOutputStream(dataOutputStream, encapStream);
+            // If encapsulating, add the data as an octet string in the sequence
+            if (encapsulate)
+			{
+                octGen = new BerOctetStringGenerator(eiGen.GetRawOutputStream(), 0, true);
+                encapStream = octGen.GetOctetOutputStream(_bufferSize);
+            }
+
+            // Also send the data to 'dataOutputStream' if necessary
+            Stream teeStream = GetSafeTeeOutputStream(dataOutputStream, encapStream);
 
         	// Let all the digests see the data as it is written
 			Stream digStream = AttachDigestsToOutputStream(m_messageDigests.Values, teeStream);
 
-			return new CmsSignedDataOutputStream(this, digStream, signedContentType, sGen, sigGen, eiGen);
+			return new CmsSignedDataOutputStream(this, digStream, signedContentType, sGen, sigGen, eiGen, octGen);
         }
 
 		private void RegisterDigestOid(
@@ -622,12 +624,13 @@ namespace Org.BouncyCastle.Cms
 			Stream			dataOutputStream,
 			CmsProcessable	content)
 		{
-			Stream signedOut = Open(outStream, eContentType, encapsulate, dataOutputStream);
-			if (content != null)
+			using (var signedOut = Open(outStream, eContentType, encapsulate, dataOutputStream))
 			{
-				content.Write(signedOut);
-			}
-            Platform.Dispose(signedOut);
+                if (content != null)
+                {
+                    content.Write(signedOut);
+                }
+            }
 		}
 
 		// RFC3852, section 5.1:
@@ -660,10 +663,8 @@ namespace Org.BouncyCastle.Cms
 			{
 				foreach (object obj in _certs)
 				{
-					if (obj is Asn1TaggedObject)
+					if (obj is Asn1TaggedObject tagged)
 					{
-						Asn1TaggedObject tagged = (Asn1TaggedObject) obj;
-
 						if (tagged.TagNo == 1)
 						{
 							attrCertV1Found = true;
@@ -763,14 +764,16 @@ namespace Org.BouncyCastle.Cms
             private BerSequenceGenerator	_sGen;
             private BerSequenceGenerator	_sigGen;
             private BerSequenceGenerator	_eiGen;
+			private BerOctetStringGenerator _octGen;
 
-			public CmsSignedDataOutputStream(
+            public CmsSignedDataOutputStream(
 				CmsSignedDataStreamGenerator	outer,
 				Stream							outStream,
                 string							contentOID,
                 BerSequenceGenerator			sGen,
                 BerSequenceGenerator			sigGen,
-                BerSequenceGenerator			eiGen)
+                BerSequenceGenerator			eiGen,
+                BerOctetStringGenerator			octGen)
             {
 				this.outer = outer;
 
@@ -779,6 +782,7 @@ namespace Org.BouncyCastle.Cms
                 _sGen = sGen;
                 _sigGen = sigGen;
                 _eiGen = eiGen;
+				_octGen = octGen;
             }
 
 			public override void Write(byte[] buffer, int offset, int count)
@@ -786,7 +790,14 @@ namespace Org.BouncyCastle.Cms
 				_out.Write(buffer, offset, count);
 			}
 
-			public override void WriteByte(byte value)
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            public override void Write(ReadOnlySpan<byte> buffer)
+            {
+                _out.Write(buffer);
+            }
+#endif
+
+            public override void WriteByte(byte value)
 			{
 				_out.WriteByte(value);
 			}
@@ -802,11 +813,14 @@ namespace Org.BouncyCastle.Cms
 
             private void DoClose()
             {
-                Platform.Dispose(_out);
+                _out.Dispose();
 
                 // TODO Parent context(s) should really be be closed explicitly
 
-                _eiGen.Close();
+				// Only for encapsulation
+				_octGen?.Dispose();
+
+                _eiGen.Dispose();
 
                 outer.m_digests.Clear();    // clear the current preserved digest state
 
@@ -891,8 +905,8 @@ namespace Org.BouncyCastle.Cms
 
                 WriteToGenerator(_sigGen, new DerSet(signerInfos));
 
-				_sigGen.Close();
-                _sGen.Close();
+				_sigGen.Dispose();
+                _sGen.Dispose();
             }
 
 			private static void WriteToGenerator(Asn1Generator ag, Asn1Encodable ae)

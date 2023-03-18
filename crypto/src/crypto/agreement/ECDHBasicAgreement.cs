@@ -26,15 +26,17 @@ namespace Org.BouncyCastle.Crypto.Agreement
     {
         protected internal ECPrivateKeyParameters privKey;
 
-        public virtual void Init(
-            ICipherParameters parameters)
+        public virtual void Init(ICipherParameters parameters)
         {
-            if (parameters is ParametersWithRandom)
+            if (parameters is ParametersWithRandom withRandom)
             {
-                parameters = ((ParametersWithRandom)parameters).Parameters;
+                parameters = withRandom.Parameters;
             }
 
-            this.privKey = (ECPrivateKeyParameters)parameters;
+            if (!(parameters is ECPrivateKeyParameters ecPrivateKeyParameters))
+                throw new ArgumentException("ECDHBasicAgreement expects ECPrivateKeyParameters");
+
+            this.privKey = ecPrivateKeyParameters;
         }
 
         public virtual int GetFieldSize()

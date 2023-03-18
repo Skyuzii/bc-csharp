@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-using Org.BouncyCastle.Utilities;
-
 namespace Org.BouncyCastle.Asn1.X509
 {
     /**
@@ -55,13 +53,13 @@ namespace Org.BouncyCastle.Asn1.X509
         }
 
 		public void SetThisUpdate(
-            DerUtcTime thisUpdate)
+            Asn1UtcTime thisUpdate)
         {
             this.thisUpdate = new Time(thisUpdate);
         }
 
 		public void SetNextUpdate(
-            DerUtcTime nextUpdate)
+            Asn1UtcTime nextUpdate)
         {
             this.nextUpdate = (nextUpdate != null)
 				?	new Time(nextUpdate)
@@ -90,7 +88,7 @@ namespace Org.BouncyCastle.Asn1.X509
 			crlEntries.Add(crlEntry);
 		}
 
-		public void AddCrlEntry(DerInteger userCertificate, DerUtcTime revocationDate, int reason)
+		public void AddCrlEntry(DerInteger userCertificate, Asn1UtcTime revocationDate, int reason)
 		{
 			AddCrlEntry(userCertificate, new Time(revocationDate), reason);
 		}
@@ -101,7 +99,7 @@ namespace Org.BouncyCastle.Asn1.X509
 		}
 
 		public void AddCrlEntry(DerInteger userCertificate, Time revocationDate, int reason,
-			DerGeneralizedTime invalidityDate)
+            Asn1GeneralizedTime invalidityDate)
 		{
             var extOids = new List<DerObjectIdentifier>();
             var extValues = new List<X509Extension>();

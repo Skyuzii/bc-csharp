@@ -39,9 +39,9 @@ namespace Org.BouncyCastle.Crypto.Signers
             this.forSigning = forSigning;
 
             AsymmetricKeyParameter k;
-            if (parameters is ParametersWithRandom)
+            if (parameters is ParametersWithRandom withRandom)
             {
-                k = (AsymmetricKeyParameter)((ParametersWithRandom)parameters).Parameters;
+                k = (AsymmetricKeyParameter)withRandom.Parameters;
             }
             else
             {
@@ -76,6 +76,8 @@ namespace Org.BouncyCastle.Crypto.Signers
         }
 #endif
 
+        public virtual int GetMaxSignatureSize() => engine.GetOutputBlockSize();
+
         public virtual byte[] GenerateSignature()
         {
             if (!forSigning)
@@ -107,7 +109,7 @@ namespace Org.BouncyCastle.Crypto.Signers
                     sig = tmp;
                 }
 
-                return Arrays.ConstantTimeAreEqual(sig, hash);
+                return Arrays.FixedTimeEquals(sig, hash);
             }
             catch (Exception)
             {

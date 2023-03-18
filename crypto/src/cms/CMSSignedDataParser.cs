@@ -8,7 +8,6 @@ using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.IO;
 using Org.BouncyCastle.Security;
-using Org.BouncyCastle.Utilities;
 using Org.BouncyCastle.Utilities.Collections;
 using Org.BouncyCastle.Utilities.IO;
 using Org.BouncyCastle.X509;
@@ -213,7 +212,7 @@ namespace Org.BouncyCastle.Cms
 
 						byte[] hash = hashes[digestName];
 
-						signerInfos.Add(new SignerInformation(info, _signedContentType, null, new BaseDigestCalculator(hash)));
+						signerInfos.Add(new SignerInformation(info, _signedContentType, null, hash));
 					}
 				}
 				catch (IOException e)
@@ -275,7 +274,14 @@ namespace Org.BouncyCastle.Cms
 			return Helper.GetCrls(_crlSet);
 		}
 
-		private void PopulateCertCrlSets()
+        public IStore<Asn1Encodable> GetOtherRevInfos(DerObjectIdentifier otherRevInfoFormat)
+        {
+            PopulateCertCrlSets();
+
+            return Helper.GetOtherRevInfos(_crlSet, otherRevInfoFormat);
+        }
+
+        private void PopulateCertCrlSets()
 		{
 			if (_isCertCrlParsed)
 				return;
@@ -359,7 +365,7 @@ namespace Org.BouncyCastle.Cms
 
 //			gen.AddSigners(parser.GetSignerInfos());
 
-            Platform.Dispose(contentOut);
+            contentOut.Dispose();
 
 			return outStr;
 		}
@@ -408,7 +414,7 @@ namespace Org.BouncyCastle.Cms
 
 			gen.AddSigners(parser.GetSignerInfos());
 
-            Platform.Dispose(contentOut);
+            contentOut.Dispose();
 
             return outStr;
 		}

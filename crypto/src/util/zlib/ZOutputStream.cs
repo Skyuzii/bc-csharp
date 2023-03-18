@@ -113,26 +113,7 @@ namespace Org.BouncyCastle.Utilities.Zlib
         {
             if (disposing)
             {
-                if (!closed)
-                {
-                    try
-                    {
-                        try
-                        {
-                            Finish();
-                        }
-                        catch (IOException)
-                        {
-                            // Ignore
-                        }
-                    }
-                    finally
-                    {
-                        this.closed = true;
-                        End();
-                        output = null;
-                    }
-                }
+                ImplDisposing(disposeOutput: false);
             }
             base.Dispose(disposing);
         }
@@ -141,29 +122,37 @@ namespace Org.BouncyCastle.Utilities.Zlib
         {
             if (disposing)
             {
-			    if (!closed)
+                ImplDisposing(disposeOutput: true);
+            }
+            base.Dispose(disposing);
+        }
+
+        private void ImplDisposing(bool disposeOutput)
+        {
+            if (!closed)
+            {
+                try
                 {
                     try
                     {
-                        try
-                        {
-                            Finish();
-                        }
-                        catch (IOException)
-                        {
-                            // Ignore
-                        }
+                        Finish();
                     }
-                    finally
+                    catch (IOException)
                     {
-                        this.closed = true;
-                        End();
-                        Platform.Dispose(output);
-                        output = null;
+                        // Ignore
                     }
                 }
+                finally
+                {
+                    this.closed = true;
+                    End();
+                    if (disposeOutput)
+                    {
+                        output.Dispose();
+                    }
+                    output = null;
+                }
             }
-            base.Dispose(disposing);
         }
 
         public virtual void End()
@@ -262,6 +251,40 @@ namespace Org.BouncyCastle.Utilities.Zlib
         {
             buf1[0] = value;
             Write(buf1, 0, 1);
+        }
+    }
+
+    public class ZOutputStreamLeaveOpen
+        : ZOutputStream
+    {
+        public ZOutputStreamLeaveOpen(Stream output)
+            : base(output)
+        {
+        }
+
+        public ZOutputStreamLeaveOpen(Stream output, bool nowrap)
+            : base(output, nowrap)
+        {
+        }
+
+        public ZOutputStreamLeaveOpen(Stream output, ZStream z)
+            : base(output, z)
+        {
+        }
+
+        public ZOutputStreamLeaveOpen(Stream output, int level)
+            : base(output, level)
+        {
+        }
+
+        public ZOutputStreamLeaveOpen(Stream output, int level, bool nowrap)
+            : base(output, level, nowrap)
+        {
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            Detach(disposing);
         }
     }
 }

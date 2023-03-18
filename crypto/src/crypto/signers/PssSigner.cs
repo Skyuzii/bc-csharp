@@ -152,35 +152,28 @@ namespace Org.BouncyCastle.Crypto.Signers
 			get { return mgfDigest.AlgorithmName + "withRSAandMGF1"; }
 		}
 
-		public virtual void Init(
-			bool				forSigning,
-			ICipherParameters	parameters)
+		public virtual void Init(bool forSigning, ICipherParameters parameters)
 		{
-			if (parameters is ParametersWithRandom)
+			if (parameters is ParametersWithRandom withRandom)
 			{
-				ParametersWithRandom p = (ParametersWithRandom) parameters;
+				parameters = withRandom.Parameters;
+				random = withRandom.Random;
+                cipher.Init(forSigning, withRandom);
+            }
+            else
+			{
+				random = forSigning ? CryptoServicesRegistrar.GetSecureRandom() : null;
+                cipher.Init(forSigning, parameters);
+            }
 
-				parameters = p.Parameters;
-				random = p.Random;
+            RsaKeyParameters kParam;
+			if (parameters is RsaBlindingParameters blinding)
+			{
+				kParam = blinding.PublicKey;
 			}
 			else
 			{
-				if (forSigning)
-				{
-					random = new SecureRandom();
-				}
-			}
-
-			cipher.Init(forSigning, parameters);
-
-			RsaKeyParameters kParam;
-			if (parameters is RsaBlindingParameters)
-			{
-				kParam = ((RsaBlindingParameters) parameters).PublicKey;
-			}
-			else
-			{
-				kParam = (RsaKeyParameters) parameters;
+				kParam = (RsaKeyParameters)parameters;
 			}
 
 			emBits = kParam.Modulus.BitLength - 1;
@@ -192,8 +185,7 @@ namespace Org.BouncyCastle.Crypto.Signers
 		}
 
 		/// <summary> clear possible sensitive data</summary>
-		private void ClearBlock(
-			byte[] block)
+		private void ClearBlock(byte[] block)
 		{
 			Array.Clear(block, 0, block.Length);
 		}
@@ -215,12 +207,9 @@ namespace Org.BouncyCastle.Crypto.Signers
 		}
 #endif
 
-		public virtual void Reset()
-		{
-			contentDigest1.Reset();
-		}
+        public virtual int GetMaxSignatureSize() => cipher.GetOutputBlockSize();
 
-		public virtual byte[] GenerateSignature()
+        public virtual byte[] GenerateSignature()
 		{
 			if (contentDigest1.GetDigestSize() != hLen)
 				throw new InvalidOperationException();
@@ -337,8 +326,13 @@ namespace Org.BouncyCastle.Crypto.Signers
 			return true;
 		}
 
-		/// <summary> int to octet string.</summary>
-		private void ItoOSP(
+        public virtual void Reset()
+        {
+            contentDigest1.Reset();
+        }
+
+        /// <summary> int to octet string.</summary>
+        private void ItoOSP(
 			int		i,
 			byte[]	sp)
 		{
@@ -348,24 +342,17 @@ namespace Org.BouncyCastle.Crypto.Signers
 			sp[3] = (byte)((uint) i >> 0);
 		}
 
-		private byte[] MaskGeneratorFunction(
-			byte[] Z,
-			int zOff,
-			int zLen,
-			int length)
-		{
-			if (mgfDigest is IXof)
+        private byte[] MaskGeneratorFunction(byte[] Z, int zOff, int zLen, int length)
+        {
+            if (mgfDigest is IXof xof)
 			{
 				byte[] mask = new byte[length];
-				mgfDigest.BlockUpdate(Z, zOff, zLen);
-				((IXof)mgfDigest).DoFinal(mask, 0, mask.Length);
-
+				xof.BlockUpdate(Z, zOff, zLen);
+				xof.OutputFinal(mask, 0, mask.Length);
 				return mask;
 			}
-			else
-			{
-				return MaskGeneratorFunction1(Z, zOff, zLen, length);
-			}
+
+			return MaskGeneratorFunction1(Z, zOff, zLen, length);
 		}
 
 		/// <summary> mask generator function, as described in Pkcs1v2.</summary>

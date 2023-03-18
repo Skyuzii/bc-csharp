@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.ExceptionServices;
 
 using Org.BouncyCastle.Tls.Crypto;
 using Org.BouncyCastle.Utilities;
@@ -258,6 +259,9 @@ namespace Org.BouncyCastle.Tls
         /// <exception cref="IOException"/>
         internal void WriteRecord(short contentType, byte[] plaintext, int plaintextOffset, int plaintextLength)
         {
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            WriteRecord(contentType, plaintext.AsSpan(plaintextOffset, plaintextLength));
+#else
             // Never send anything until a valid ClientHello has been received
             if (m_writeVersion == null)
                 return;
@@ -298,32 +302,80 @@ namespace Org.BouncyCastle.Tls
             //}
 
             m_output.Flush();
+#endif
         }
+
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        /// <exception cref="IOException"/>
+        internal void WriteRecord(short contentType, ReadOnlySpan<byte> plaintext)
+        {
+            // Never send anything until a valid ClientHello has been received
+            if (m_writeVersion == null)
+                return;
+
+            /*
+             * RFC 5246 6.2.1 The length should not exceed 2^14.
+             */
+            CheckLength(plaintext.Length, m_plaintextLimit, AlertDescription.internal_error);
+
+            /*
+             * RFC 5246 6.2.1 Implementations MUST NOT send zero-length fragments of Handshake, Alert,
+             * or ChangeCipherSpec content types.
+             */
+            if (plaintext.Length < 1 && contentType != ContentType.application_data)
+                throw new TlsFatalAlert(AlertDescription.internal_error);
+
+            long seqNo = m_writeSeqNo.NextValue(AlertDescription.internal_error);
+            ProtocolVersion recordVersion = m_writeVersion;
+
+            TlsEncodeResult encoded = m_writeCipher.EncodePlaintext(seqNo, contentType, recordVersion,
+                RecordFormat.FragmentOffset, plaintext);
+
+            int ciphertextLength = encoded.len - RecordFormat.FragmentOffset;
+            TlsUtilities.CheckUint16(ciphertextLength);
+
+            TlsUtilities.WriteUint8(encoded.recordType, encoded.buf, encoded.off + RecordFormat.TypeOffset);
+            TlsUtilities.WriteVersion(recordVersion, encoded.buf, encoded.off + RecordFormat.VersionOffset);
+            TlsUtilities.WriteUint16(ciphertextLength, encoded.buf, encoded.off + RecordFormat.LengthOffset);
+
+            // TODO[tls-port] Can we support interrupted IO on .NET?
+            //try
+            //{
+                m_output.Write(encoded.buf, encoded.off, encoded.len);
+            //}
+            //catch (InterruptedIOException e)
+            //{
+            //    throw new TlsFatalAlert(AlertDescription.internal_error, e);
+            //}
+
+            m_output.Flush();
+        }
+#endif
 
         /// <exception cref="IOException"/>
         internal void Close()
         {
             m_inputRecord.Reset();
 
-            IOException io = null;
+            ExceptionDispatchInfo io = null;
             try
             {
-                Platform.Dispose(m_input);
+                m_input.Dispose();
             }
             catch (IOException e)
             {
-                io = e;
+                io = ExceptionDispatchInfo.Capture(e);
             }
 
             try
             {
-                Platform.Dispose(m_output);
+                m_output.Dispose();
             }
             catch (IOException e)
             {
                 if (io == null)
                 {
-                    io = e;
+                    io = ExceptionDispatchInfo.Capture(e);
                 }
                 else
                 {
@@ -332,8 +384,7 @@ namespace Org.BouncyCastle.Tls
                 }
             }
 
-            if (io != null)
-                throw io;
+            io?.Throw();
         }
 
         /// <exception cref="IOException"/>

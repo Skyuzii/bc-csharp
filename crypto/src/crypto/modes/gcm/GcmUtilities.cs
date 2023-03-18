@@ -14,14 +14,8 @@ using Org.BouncyCastle.Utilities;
 
 namespace Org.BouncyCastle.Crypto.Modes.Gcm
 {
-    internal abstract class GcmUtilities
+    internal static class GcmUtilities
     {
-#if NETCOREAPP3_0_OR_GREATER
-        private static readonly Vector128<byte> EndianMask = Vector128.Create(
-            (byte)0x07, (byte)0x06, (byte)0x05, (byte)0x04, (byte)0x03, (byte)0x02, (byte)0x01, (byte)0x00,
-            (byte)0x0F, (byte)0x0E, (byte)0x0D, (byte)0x0C, (byte)0x0B, (byte)0x0A, (byte)0x09, (byte)0x08);
-#endif
-
         internal struct FieldElement
         {
             internal ulong n0, n1;
@@ -41,17 +35,6 @@ namespace Org.BouncyCastle.Crypto.Modes.Gcm
 #endif
         internal static void AsBytes(ulong x0, ulong x1, byte[] z)
         {
-#if NETCOREAPP3_0_OR_GREATER
-            if (Ssse3.IsSupported && BitConverter.IsLittleEndian && Unsafe.SizeOf<Vector128<byte>>() == 16)
-            {
-                var X = Vector128.Create(x0, x1).AsByte();
-                // TODO[Arm] System.Runtime.Intrinsics.Arm.AdvSimd.Reverse8
-                var Z = Ssse3.Shuffle(X, EndianMask);
-                Unsafe.WriteUnaligned(ref z[0], Z);
-                return;
-            }
-#endif
-
             Pack.UInt64_To_BE(x0, z, 0);
             Pack.UInt64_To_BE(x1, z, 8);
         }
@@ -69,17 +52,6 @@ namespace Org.BouncyCastle.Crypto.Modes.Gcm
 #endif
         internal static void AsFieldElement(byte[] x, out FieldElement z)
         {
-#if NETCOREAPP3_0_OR_GREATER
-            if (Ssse3.IsSupported && BitConverter.IsLittleEndian && Unsafe.SizeOf<Vector128<byte>>() == 16)
-            {
-                var X = Unsafe.ReadUnaligned<Vector128<byte>>(ref x[0]);
-                var Z = Ssse3.Shuffle(X, EndianMask).AsUInt64();
-                z.n0 = Z.GetElement(0);
-                z.n1 = Z.GetElement(1);
-                return;
-            }
-#endif
-
             z.n0 = Pack.BE_To_UInt64(x, 0);
             z.n1 = Pack.BE_To_UInt64(x, 8);
         }
@@ -168,6 +140,108 @@ namespace Org.BouncyCastle.Crypto.Modes.Gcm
             x.n1 = z1;
         }
 
+#if NETCOREAPP3_0_OR_GREATER
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static Vector128<ulong> Load(byte[] x)
+        {
+            AsFieldElement(x, out FieldElement X);
+            return Vector128.Create(X.n1, X.n0);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static Vector128<ulong> Multiply(Vector128<ulong> X, Vector128<ulong> Y)
+        {
+            MultiplyExt(X, Y, out var Z0, out var Z1, out var Z2);
+            return Reduce3(Z0, Z1, Z2);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void MultiplyExt(Vector128<ulong> X, Vector128<ulong> Y, out Vector128<ulong> Z0,
+            out Vector128<ulong> Z1, out Vector128<ulong> Z2)
+        {
+            if (!Pclmulqdq.IsSupported)
+                throw new PlatformNotSupportedException(nameof(GcmUtilities.MultiplyExt));
+
+            Z0 =          Pclmulqdq.CarrylessMultiply(X, Y, 0x00);
+            Z1 = Sse2.Xor(Pclmulqdq.CarrylessMultiply(X, Y, 0x01),
+                          Pclmulqdq.CarrylessMultiply(X, Y, 0x10));
+            Z2 =          Pclmulqdq.CarrylessMultiply(X, Y, 0x11);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static Vector128<ulong> Reduce2(Vector128<ulong> Z0, Vector128<ulong> Z2)
+        {
+            ulong t3 = Z0.GetElement(0);
+            ulong t2 = Z0.GetElement(1);
+            ulong t1 = Z2.GetElement(0);
+            ulong t0 = Z2.GetElement(1);
+
+            ulong z0 = (t0 << 1) | (t1 >> 63);
+            ulong z1 = (t1 << 1) | (t2 >> 63);
+            ulong z2 = (t2 << 1) | (t3 >> 63);
+            ulong z3 = (t3 << 1);
+
+            Debug.Assert(z3 << 63 == 0);
+
+            z1 ^= z3 ^ (z3 >>  1) ^ (z3 >>  2) ^ (z3 >>  7);
+//          z2 ^=      (z3 << 63) ^ (z3 << 62) ^ (z3 << 57);
+            z2 ^=                   (z3 << 62) ^ (z3 << 57);
+
+            z0 ^= z2 ^ (z2 >>  1) ^ (z2 >>  2) ^ (z2 >>  7);
+            z1 ^=      (z2 << 63) ^ (z2 << 62) ^ (z2 << 57);
+
+            return Vector128.Create(z1, z0);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static Vector128<ulong> Reduce3(Vector128<ulong> Z0, Vector128<ulong> Z1, Vector128<ulong> Z2)
+        {
+            ulong t3 = Z0.GetElement(0);
+            ulong t2 = Z0.GetElement(1) ^ Z1.GetElement(0);
+            ulong t1 = Z2.GetElement(0) ^ Z1.GetElement(1);
+            ulong t0 = Z2.GetElement(1);
+
+            ulong z0 = (t0 << 1) | (t1 >> 63);
+            ulong z1 = (t1 << 1) | (t2 >> 63);
+            ulong z2 = (t2 << 1) | (t3 >> 63);
+            ulong z3 = (t3 << 1);
+
+            Debug.Assert(z3 << 63 == 0);
+
+            z1 ^= z3 ^ (z3 >>  1) ^ (z3 >>  2) ^ (z3 >>  7);
+//          z2 ^=      (z3 << 63) ^ (z3 << 62) ^ (z3 << 57);
+            z2 ^=                   (z3 << 62) ^ (z3 << 57);
+
+            z0 ^= z2 ^ (z2 >>  1) ^ (z2 >>  2) ^ (z2 >>  7);
+            z1 ^=      (z2 << 63) ^ (z2 << 62) ^ (z2 << 57);
+
+            return Vector128.Create(z1, z0);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void Store(Vector128<ulong> X, byte[] z)
+        {
+            AsBytes(X.GetElement(1), X.GetElement(0), z);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static Vector128<ulong> Square(Vector128<ulong> X)
+        {
+            SquareExt(X, out var Z0, out var Z2);
+            return Reduce2(Z0, Z2);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void SquareExt(Vector128<ulong> X, out Vector128<ulong> Z0, out Vector128<ulong> Z2)
+        {
+            if (!Pclmulqdq.IsSupported)
+                throw new PlatformNotSupportedException(nameof(GcmUtilities.SquareExt));
+
+            Z0 = Pclmulqdq.CarrylessMultiply(X, X, 0x00);
+            Z2 = Pclmulqdq.CarrylessMultiply(X, X, 0x11);
+        }
+#endif
+
         internal static void MultiplyP7(ref FieldElement x)
         {
             ulong x0 = x.n0, x1 = x.n1;
@@ -205,13 +279,13 @@ namespace Org.BouncyCastle.Crypto.Modes.Gcm
             ulong z1 = Interleave.Expand64To128Rev(x.n0, out ulong z0);
             ulong z3 = Interleave.Expand64To128Rev(x.n1, out ulong z2);
 
-            Debug.Assert(z3 << 63 == 0);
+            Debug.Assert(z3 << 63 == 0UL);
 
             z1 ^= z3 ^ (z3 >>  1) ^ (z3 >>  2) ^ (z3 >>  7);
 //          z2 ^=      (z3 << 63) ^ (z3 << 62) ^ (z3 << 57);
             z2 ^=                   (z3 << 62) ^ (z3 << 57);
 
-            Debug.Assert(z2 << 63 == 0);
+            Debug.Assert(z2 << 63 == 0UL);
 
             z0 ^= z2 ^ (z2 >>  1) ^ (z2 >>  2) ^ (z2 >>  7);
 //          z1 ^=      (z2 << 63) ^ (z2 << 62) ^ (z2 << 57);

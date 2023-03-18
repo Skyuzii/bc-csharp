@@ -97,7 +97,7 @@ namespace Org.BouncyCastle.Asn1.X509
 				return new RevokedCertificatesEnumerator(en.GetEnumerator());
 			}
 
-			private class RevokedCertificatesEnumerator
+			private sealed class RevokedCertificatesEnumerator
 				: IEnumerator<CrlEntry>
 			{
 				private readonly IEnumerator<Asn1Encodable> e;
@@ -107,11 +107,13 @@ namespace Org.BouncyCastle.Asn1.X509
 					this.e = e;
 				}
 
-				public virtual void Dispose()
+				public void Dispose()
 				{
-				}
+					e.Dispose();
+                    GC.SuppressFinalize(this);
+                }
 
-				public bool MoveNext()
+                public bool MoveNext()
 				{
 					return e.MoveNext();
 				}
@@ -167,21 +169,19 @@ namespace Org.BouncyCastle.Asn1.X509
             throw new ArgumentException("unknown object in factory: " + Platform.GetTypeName(obj), "obj");
         }
 
-		internal TbsCertificateList(
-            Asn1Sequence seq)
+		internal TbsCertificateList(Asn1Sequence seq)
         {
 			if (seq.Count < 3 || seq.Count > 7)
-			{
 				throw new ArgumentException("Bad sequence size: " + seq.Count);
-			}
 
 			int seqPos = 0;
 
 			this.seq = seq;
 
-			if (seq[seqPos] is DerInteger)
+			if (seq[seqPos] is DerInteger derInteger)
             {
-				version = DerInteger.GetInstance(seq[seqPos++]);
+				version = derInteger;
+				++seqPos;
 			}
             else
             {
@@ -193,8 +193,8 @@ namespace Org.BouncyCastle.Asn1.X509
             thisUpdate = Time.GetInstance(seq[seqPos++]);
 
 			if (seqPos < seq.Count
-                && (seq[seqPos] is DerUtcTime
-                   || seq[seqPos] is DerGeneralizedTime
+                && (seq[seqPos] is Asn1UtcTime
+                   || seq[seqPos] is Asn1GeneralizedTime
                    || seq[seqPos] is Time))
             {
                 nextUpdate = Time.GetInstance(seq[seqPos++]);

@@ -30,22 +30,23 @@ namespace Org.BouncyCastle.Asn1
          */
         public static Asn1Sequence GetInstance(object obj)
         {
-            if (obj == null || obj is Asn1Sequence)
+            if (obj == null)
+                return null;
+
+            if (obj is Asn1Sequence asn1Sequence)
+                return asn1Sequence;
+
+            if (obj is IAsn1Convertible asn1Convertible)
             {
-                return (Asn1Sequence)obj;
+                Asn1Object asn1Object = asn1Convertible.ToAsn1Object();
+                if (asn1Object is Asn1Sequence converted)
+                    return converted;
             }
-            //else if (obj is Asn1SequenceParser)
-            else if (obj is IAsn1Convertible)
-            {
-                Asn1Object asn1Object = ((IAsn1Convertible)obj).ToAsn1Object();
-                if (asn1Object is Asn1Sequence)
-                    return (Asn1Sequence)asn1Object;
-            }
-            else if (obj is byte[])
+            else if (obj is byte[] bytes)
             {
                 try
                 {
-                    return (Asn1Sequence)Meta.Instance.FromByteArray((byte[])obj);
+                    return (Asn1Sequence)Meta.Instance.FromByteArray(bytes);
                 }
                 catch (IOException e)
                 {
@@ -75,8 +76,7 @@ namespace Org.BouncyCastle.Asn1
             return (Asn1Sequence)Meta.Instance.GetContextInstance(taggedObject, declaredExplicit);
         }
 
-        // NOTE: Only non-readonly to support LazyDLSequence
-        internal Asn1Encodable[] elements;
+        internal readonly Asn1Encodable[] elements;
 
         protected internal Asn1Sequence()
         {
@@ -144,7 +144,6 @@ namespace Org.BouncyCastle.Asn1
                 Asn1Sequence outer)
             {
                 this.outer = outer;
-                // NOTE: Call Count here to 'force' a LazyDerSequence
                 this.max = outer.Count;
             }
 
@@ -197,7 +196,6 @@ namespace Org.BouncyCastle.Asn1
 
         public virtual T[] MapElements<T>(Func<Asn1Encodable, T> func)
         {
-            // NOTE: Call Count here to 'force' a LazyDerSequence
             int count = Count;
             T[] result = new T[count];
             for (int i = 0; i < count; ++i)
@@ -214,7 +212,6 @@ namespace Org.BouncyCastle.Asn1
 
         protected override int Asn1GetHashCode()
         {
-            // NOTE: Call Count here to 'force' a LazyDerSequence
             int i = Count;
             int hc = i + 1;
 
@@ -233,7 +230,6 @@ namespace Org.BouncyCastle.Asn1
             if (null == that)
                 return false;
 
-            // NOTE: Call Count here (on both) to 'force' a LazyDerSequence
             int count = this.Count;
             if (that.Count != count)
                 return false;

@@ -28,21 +28,23 @@ namespace Org.BouncyCastle.Asn1
          */
         public static DerEnumerated GetInstance(object obj)
         {
-            if (obj == null || obj is DerEnumerated)
+            if (obj == null)
+                return null;
+
+            if (obj is DerEnumerated derEnumerated)
+                return derEnumerated;
+
+            if (obj is IAsn1Convertible asn1Convertible)
             {
-                return (DerEnumerated)obj;
+                Asn1Object asn1Object = asn1Convertible.ToAsn1Object();
+                if (asn1Object is DerEnumerated converted)
+                    return converted;
             }
-            else if (obj is IAsn1Convertible)
-            {
-                Asn1Object asn1Object = ((IAsn1Convertible)obj).ToAsn1Object();
-                if (asn1Object is DerEnumerated)
-                    return (DerEnumerated)asn1Object;
-            }
-            else if (obj is byte[])
+            else if (obj is byte[] bytes)
             {
                 try
                 {
-                    return (DerEnumerated)Meta.Instance.FromByteArray((byte[])obj);
+                    return (DerEnumerated)Meta.Instance.FromByteArray(bytes);
                 }
                 catch (IOException e)
                 {
@@ -150,6 +152,16 @@ namespace Org.BouncyCastle.Asn1
         internal override IAsn1Encoding GetEncodingImplicit(int encoding, int tagClass, int tagNo)
         {
             return new PrimitiveEncoding(tagClass, tagNo, contents);
+        }
+
+        internal sealed override DerEncoding GetEncodingDer()
+        {
+            return new PrimitiveDerEncoding(Asn1Tags.Universal, Asn1Tags.Enumerated, contents);
+        }
+
+        internal sealed override DerEncoding GetEncodingDerImplicit(int tagClass, int tagNo)
+        {
+            return new PrimitiveDerEncoding(tagClass, tagNo, contents);
         }
 
         protected override bool Asn1Equals(Asn1Object asn1Object)

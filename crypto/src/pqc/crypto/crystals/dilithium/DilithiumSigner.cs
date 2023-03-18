@@ -12,45 +12,44 @@ namespace Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium
 
         private SecureRandom random;
 
-        public DilithiumSigner(SecureRandom random)
+        public DilithiumSigner()
         {
-            this.random = random;
         }
 
         public void Init(bool forSigning, ICipherParameters param)
         {
             if (forSigning)
             {
-                if (param is ParametersWithRandom)
-            {
-                    privKey = (DilithiumPrivateKeyParameters)((ParametersWithRandom)param).Parameters;
-                    random = ((ParametersWithRandom)param).Random;
+                if (param is ParametersWithRandom withRandom)
+                {
+                    privKey = (DilithiumPrivateKeyParameters)withRandom.Parameters;
+                    random = withRandom.Random;
                 }
                 else
-                    {
-                        privKey = (DilithiumPrivateKeyParameters)param;
-                        random = new SecureRandom();
-                    }
+                {
+                    privKey = (DilithiumPrivateKeyParameters)param;
+                    random = null;
+                }
             }
             else
             {
-                pubKey = (DilithiumPublicKeyParameters) param;
+                pubKey = (DilithiumPublicKeyParameters)param;
+                random = null;
             }
-
         }
 
         public byte[] GenerateSignature(byte[] message)
         {
             DilithiumEngine engine = privKey.Parameters.GetEngine(random);
-          
-            return engine.Sign(engine, message, message.Length, privKey.GetEncoded());
-         
+            byte[] sig = new byte[engine.CryptoBytes];
+            engine.Sign(sig, sig.Length, message, message.Length, privKey.rho, privKey.k, privKey.tr, privKey.t0, privKey.s1, privKey.s2);
+            return sig;
         }
 
         public bool VerifySignature(byte[] message, byte[] signature)
         {
             DilithiumEngine engine = pubKey.Parameters.GetEngine(random);
-            return engine.SignOpen(message, message.Length, signature, signature.Length, pubKey.GetEncoded());
+            return engine.SignOpen(message,signature, signature.Length, pubKey.rho, pubKey.t1 );
         }
     }
 }

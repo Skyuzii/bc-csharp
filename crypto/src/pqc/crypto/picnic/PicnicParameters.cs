@@ -1,12 +1,23 @@
-
-using System;
 using Org.BouncyCastle.Crypto;
 
 namespace Org.BouncyCastle.Pqc.Crypto.Picnic
 {
-    public class PicnicParameters
+    public sealed class PicnicParameters
         : ICipherParameters
+    {
+        private class L1Constants
         {
+            internal static readonly LowmcConstants Instance = new LowmcConstantsL1();
+        } 
+        private class L3Constants
+        {
+            internal static readonly LowmcConstants Instance = new LowmcConstantsL3();
+        } 
+        private class L5Constants
+        {
+            internal static readonly LowmcConstants Instance = new LowmcConstantsL5();
+        } 
+        
         public static PicnicParameters picnicl1fs = new PicnicParameters("picnicl1fs", 1);
         public static PicnicParameters picnicl1ur = new PicnicParameters("picnicl1ur", 2);
         public static PicnicParameters picnicl3fs = new PicnicParameters("picnicl3fs", 3);
@@ -20,22 +31,38 @@ namespace Org.BouncyCastle.Pqc.Crypto.Picnic
         public static PicnicParameters picnicl3full = new PicnicParameters("picnicl3full", 11);
         public static PicnicParameters picnicl5full = new PicnicParameters("picnicl5full", 12);
 
-        private String name;
+        private string name;
         private int param;
-        private PicnicParameters(String name, int param)
+
+        private PicnicParameters(string name, int param)
         {
             this.name = name;
             this.param = param;
         }
 
-        public String GetName()
-        {
-            return name;
-        }
+        public string Name => name;
 
         internal PicnicEngine GetEngine()
         {
-            return new PicnicEngine(param);
+            switch (param)
+            {
+                case 1:
+                case 2:
+                case 7:
+                case 10:
+                    return new PicnicEngine(param, L1Constants.Instance);
+                case 3:
+                case 4:
+                case 8:
+                case 11:
+                    return new PicnicEngine(param, L3Constants.Instance);
+                case 12:
+                case 5:
+                case 6:
+                case 9:
+                    return new PicnicEngine(param, L5Constants.Instance);
+                default: return null;
+            }
         }
     }
 }

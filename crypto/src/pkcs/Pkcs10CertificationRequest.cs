@@ -11,10 +11,10 @@ using Org.BouncyCastle.Asn1.TeleTrust;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Operators;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Utilities;
 using Org.BouncyCastle.X509;
-using Org.BouncyCastle.Crypto.Operators;
 
 namespace Org.BouncyCastle.Pkcs
 {
@@ -281,14 +281,14 @@ namespace Org.BouncyCastle.Pkcs
 
             this.reqInfo = new CertificationRequestInfo(subject, pubInfo, attributes);
 
-            IStreamCalculator streamCalculator = signatureFactory.CreateCalculator();
+            IStreamCalculator<IBlockResult> streamCalculator = signatureFactory.CreateCalculator();
             using (Stream sigStream = streamCalculator.Stream)
             {
                 reqInfo.EncodeTo(sigStream, Der);
             }
 
             // Generate Signature.
-            sigBits = new DerBitString(((IBlockResult)streamCalculator.GetResult()).Collect());
+            sigBits = new DerBitString(streamCalculator.GetResult().Collect());
         }
 
         //        internal Pkcs10CertificationRequest(
@@ -342,15 +342,13 @@ namespace Org.BouncyCastle.Pkcs
         {
             try
             {
-                byte[] b = reqInfo.GetDerEncoded();
+                IStreamCalculator<IVerifier> streamCalculator = verifier.CreateCalculator();
+                using (var stream = streamCalculator.Stream)
+                {
+                    reqInfo.EncodeTo(stream, Asn1Encodable.Der);
+                }
 
-                IStreamCalculator streamCalculator = verifier.CreateCalculator();
-
-                streamCalculator.Stream.Write(b, 0, b.Length);
-
-                Platform.Dispose(streamCalculator.Stream);
-
-                return ((IVerifier)streamCalculator.GetResult()).IsVerified(sigBits.GetOctets());
+                return streamCalculator.GetResult().IsVerified(sigBits.GetOctets());
             }
             catch (Exception e)
             {

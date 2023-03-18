@@ -25,21 +25,23 @@ namespace Org.BouncyCastle.Asn1
 
         public static DerExternal GetInstance(object obj)
         {
-            if (obj == null || obj is DerExternal)
+            if (obj == null)
+                return null;
+
+            if (obj is DerExternal derExternal)
+                return derExternal;
+
+            if (obj is IAsn1Convertible asn1Convertible)
             {
-                return (DerExternal)obj;
+                Asn1Object asn1Object = asn1Convertible.ToAsn1Object();
+                if (asn1Object is DerExternal converted)
+                    return converted;
             }
-            else if (obj is IAsn1Convertible)
-            {
-                Asn1Object asn1Object = ((IAsn1Convertible)obj).ToAsn1Object();
-                if (asn1Object is DerExternal)
-                    return (DerExternal)asn1Object;
-            }
-            else if (obj is byte[])
+            else if (obj is byte[] bytes)
             {
                 try
                 {
-                    return (DerExternal)Meta.Instance.FromByteArray((byte[])obj);
+                    return (DerExternal)Meta.Instance.FromByteArray(bytes);
                 }
                 catch (IOException e)
                 {
@@ -55,14 +57,14 @@ namespace Org.BouncyCastle.Asn1
             return (DerExternal)Meta.Instance.GetContextInstance(taggedObject, declaredExplicit);
         }
 
-		private readonly DerObjectIdentifier directReference;
-		private readonly DerInteger indirectReference;
-        private readonly Asn1ObjectDescriptor dataValueDescriptor;
-		private readonly int encoding;
-		private readonly Asn1Object externalContent;
+		internal readonly DerObjectIdentifier directReference;
+        internal readonly DerInteger indirectReference;
+        internal readonly Asn1ObjectDescriptor dataValueDescriptor;
+        internal readonly int encoding;
+        internal readonly Asn1Object externalContent;
 
         public DerExternal(Asn1EncodableVector vector)
-            : this(new DerSequence(vector))
+            : this(new BerSequence(vector))
         {
         }
 
@@ -107,8 +109,15 @@ namespace Org.BouncyCastle.Asn1
 		* @param dataValueDescriptor The data value descriptor or <code>null</code> if not set.
 		* @param externalData The external data in its encoded form.
 		*/
+        [Obsolete("Pass 'externalData' at type Asn1TaggedObject")]
         public DerExternal(DerObjectIdentifier directReference, DerInteger indirectReference,
             Asn1ObjectDescriptor dataValueDescriptor, DerTaggedObject externalData)
+            : this(directReference, indirectReference, dataValueDescriptor, (Asn1TaggedObject)externalData)
+        {
+        }
+
+        public DerExternal(DerObjectIdentifier directReference, DerInteger indirectReference,
+            Asn1ObjectDescriptor dataValueDescriptor, Asn1TaggedObject externalData)
         {
             this.directReference = directReference;
             this.indirectReference = indirectReference;
@@ -136,7 +145,7 @@ namespace Org.BouncyCastle.Asn1
             this.externalContent = CheckExternalContent(encoding, externalData);
         }
 
-        internal Asn1Sequence BuildSequence()
+        internal virtual Asn1Sequence BuildSequence()
         {
             Asn1EncodableVector v = new Asn1EncodableVector(4);
             v.AddOptional(directReference, indirectReference, dataValueDescriptor);
@@ -146,12 +155,23 @@ namespace Org.BouncyCastle.Asn1
 
         internal override IAsn1Encoding GetEncoding(int encoding)
         {
-            return BuildSequence().GetEncodingImplicit(encoding, Asn1Tags.Universal, Asn1Tags.External);
+            return BuildSequence().GetEncodingImplicit(Asn1OutputStream.EncodingDer, Asn1Tags.Universal,
+                Asn1Tags.External);
         }
 
         internal override IAsn1Encoding GetEncodingImplicit(int encoding, int tagClass, int tagNo)
         {
-            return BuildSequence().GetEncodingImplicit(encoding, tagClass, tagNo);
+            return BuildSequence().GetEncodingImplicit(Asn1OutputStream.EncodingDer, tagClass, tagNo);
+        }
+
+        internal sealed override DerEncoding GetEncodingDer()
+        {
+            return BuildSequence().GetEncodingDerImplicit(Asn1Tags.Universal, Asn1Tags.External);
+        }
+
+        internal sealed override DerEncoding GetEncodingDerImplicit(int tagClass, int tagNo)
+        {
+            return BuildSequence().GetEncodingDerImplicit(tagClass, tagNo);
         }
 
         protected override int Asn1GetHashCode()

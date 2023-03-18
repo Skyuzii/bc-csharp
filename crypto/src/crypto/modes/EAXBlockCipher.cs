@@ -115,9 +115,7 @@ namespace Org.BouncyCastle.Crypto.Modes
         private void InitCipher()
         {
             if (cipherInitialized)
-            {
                 return;
-            }
 
             cipherInitialized = true;
 
@@ -173,9 +171,8 @@ namespace Org.BouncyCastle.Crypto.Modes
         public virtual void ProcessAadByte(byte input)
         {
             if (cipherInitialized)
-            {
                 throw new InvalidOperationException("AAD data cannot be added after encryption/decryption processing has begun.");
-            }
+
             mac.Update(input);
         }
 
@@ -219,11 +216,11 @@ namespace Org.BouncyCastle.Crypto.Modes
 
         public virtual int ProcessBytes(byte[] inBytes, int inOff, int len, byte[] outBytes, int outOff)
         {
-            InitCipher();
-
 #if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
 			return ProcessBytes(inBytes.AsSpan(inOff, len), Spans.FromNullable(outBytes, outOff));
 #else
+            InitCipher();
+
             int resultLen = 0;
 
 			for (int i = 0; i != len; i++)
@@ -233,7 +230,7 @@ namespace Org.BouncyCastle.Crypto.Modes
 
             return resultLen;
 #endif
-		}
+        }
 
 #if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
         public virtual int ProcessBytes(ReadOnlySpan<byte> input, Span<byte> output)
@@ -316,7 +313,11 @@ namespace Org.BouncyCastle.Crypto.Modes
             InitCipher();
 
             int extra = bufOff;
-			Span<byte> tmp = stackalloc byte[bufBlock.Length];
+			int tmpLength = bufBlock.Length;
+
+            Span<byte> tmp = tmpLength <= 128
+				? stackalloc byte[tmpLength]
+				: new byte[tmpLength];
 
             bufOff = 0;
 
@@ -375,8 +376,7 @@ namespace Org.BouncyCastle.Crypto.Modes
 			return mac;
 		}
 
-        public virtual int GetUpdateOutputSize(
-			int len)
+        public virtual int GetUpdateOutputSize(int len)
 		{
             int totalData = len + bufOff;
             if (!forEncryption)
@@ -390,8 +390,7 @@ namespace Org.BouncyCastle.Crypto.Modes
             return totalData - totalData % blockSize;
         }
 
-		public virtual int GetOutputSize(
-			int len)
+		public virtual int GetOutputSize(int len)
 		{
             int totalData = len + bufOff;
 
@@ -485,14 +484,7 @@ namespace Org.BouncyCastle.Crypto.Modes
 
         private bool VerifyMac(byte[] mac, int off)
 		{
-            int nonEqual = 0;
-
-            for (int i = 0; i < macSize; i++)
-            {
-                nonEqual |= (macBlock[i] ^ mac[off + i]);
-            }
-
-            return nonEqual == 0;
+			return Arrays.FixedTimeEquals(macSize, mac, off, macBlock, 0);
 		}
 	}
 }

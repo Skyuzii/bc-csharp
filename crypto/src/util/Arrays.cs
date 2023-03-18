@@ -1,4 +1,8 @@
 using System;
+using System.Runtime.CompilerServices;
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+using System.Security.Cryptography;
+#endif
 using System.Text;
 
 using Org.BouncyCastle.Math;
@@ -6,7 +10,7 @@ using Org.BouncyCastle.Math;
 namespace Org.BouncyCastle.Utilities
 {
     /// <summary> General array utilities.</summary>
-    public abstract class Arrays
+    public static class Arrays
     {
         public static readonly byte[] EmptyBytes = new byte[0];
         public static readonly int[] EmptyInts = new int[0];
@@ -20,6 +24,18 @@ namespace Org.BouncyCastle.Utilities
             }
             return bits == 0;
         }
+
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public static bool AreAllZeroes(ReadOnlySpan<byte> buf)
+        {
+            uint bits = 0;
+            for (int i = 0; i < buf.Length; ++i)
+            {
+                bits |= buf[i];
+            }
+            return bits == 0;
+        }
+#endif
 
         public static bool AreEqual(
             bool[]  a,
@@ -81,34 +97,64 @@ namespace Org.BouncyCastle.Utilities
             return true;
         }
 
-        /// <summary>
-        /// A constant time equals comparison - does not terminate early if
-        /// test will fail.
-        /// </summary>
-        /// <param name="a">first array</param>
-        /// <param name="b">second array</param>
-        /// <returns>true if arrays equal, false otherwise.</returns>
+        [CLSCompliant(false)]
+        public static bool AreEqual(ulong[] a, int aFromIndex, int aToIndex, ulong[] b, int bFromIndex, int bToIndex)
+        {
+            int aLength = aToIndex - aFromIndex;
+            int bLength = bToIndex - bFromIndex;
+
+            if (aLength != bLength)
+                return false;
+
+            for (int i = 0; i < aLength; ++i)
+            {
+                if (a[aFromIndex + i] != b[bFromIndex + i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        [Obsolete("Use 'FixedTimeEquals' instead")]
         public static bool ConstantTimeAreEqual(byte[] a, byte[] b)
+        {
+            return FixedTimeEquals(a, b);
+        }
+
+        [Obsolete("Use 'FixedTimeEquals' instead")]
+        public static bool ConstantTimeAreEqual(int len, byte[] a, int aOff, byte[] b, int bOff)
+        {
+            return FixedTimeEquals(len, a, aOff, b, bOff);
+        }
+
+#if !(NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER)
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+#endif
+        public static bool FixedTimeEquals(byte[] a, byte[] b)
         {
             if (null == a || null == b)
                 return false;
-            if (a == b)
-                return true;
 
-            int len = System.Math.Min(a.Length, b.Length);
-            int nonEqual = a.Length ^ b.Length;
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            return CryptographicOperations.FixedTimeEquals(a, b);
+#else
+            int len = a.Length;
+            if (len != b.Length)
+                return false;
+
+            int d = 0;
             for (int i = 0; i < len; ++i)
             {
-                nonEqual |= (a[i] ^ b[i]);
+                d |= a[i] ^ b[i];
             }
-            for (int i = len; i < b.Length; ++i)
-            {
-                nonEqual |= (b[i] ^ ~b[i]);
-            }
-            return 0 == nonEqual;
+            return 0 == d;
+#endif
         }
 
-        public static bool ConstantTimeAreEqual(int len, byte[] a, int aOff, byte[] b, int bOff)
+#if !(NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER)
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+#endif
+        public static bool FixedTimeEquals(int len, byte[] a, int aOff, byte[] b, int bOff)
         {
             if (null == a)
                 throw new ArgumentNullException("a");
@@ -121,27 +167,28 @@ namespace Org.BouncyCastle.Utilities
             if (bOff > (b.Length - len))
                 throw new IndexOutOfRangeException("'bOff' value invalid for specified length");
 
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            return CryptographicOperations.FixedTimeEquals(a.AsSpan(aOff, len), b.AsSpan(bOff, len));
+#else
             int d = 0;
             for (int i = 0; i < len; ++i)
             {
                 d |= a[aOff + i] ^ b[bOff + i];
             }
             return 0 == d;
+#endif
         }
 
 #if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        [Obsolete("Use 'FixedTimeEquals' instead")]
         public static bool ConstantTimeAreEqual(Span<byte> a, Span<byte> b)
         {
-            if (a.Length != b.Length)
-                throw new ArgumentException("Spans to compare must have equal length");
+            return CryptographicOperations.FixedTimeEquals(a, b);
+        }
 
-            int d = 0;
-            for (int i = 0, count = a.Length; i < count; ++i)
-            {
-                d |= a[i] ^ b[i];
-            }
-            return 0 == d;
-
+        public static bool FixedTimeEquals(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
+        {
+            return CryptographicOperations.FixedTimeEquals(a, b);
         }
 #endif
 
@@ -577,9 +624,7 @@ namespace Org.BouncyCastle.Utilities
             return false;
         }
 
-        public static void Fill(
-            byte[]	buf,
-            byte	b)
+        public static void Fill(byte[] buf, byte b)
         {
             int i = buf.Length;
             while (i > 0)
@@ -589,9 +634,7 @@ namespace Org.BouncyCastle.Utilities
         }
 
         [CLSCompliant(false)]
-        public static void Fill(
-            ulong[]	buf,
-            ulong	b)
+        public static void Fill(ulong[] buf, ulong b)
         {
             int i = buf.Length;
             while (i > 0)
@@ -607,6 +650,21 @@ namespace Org.BouncyCastle.Utilities
                 buf[i] = b;
             }
         }
+
+        public static void Fill<T>(T[] ts, T t)
+        {
+            for (int i = 0; i < ts.Length; ++i)
+            {
+                ts[i] = t;
+            }
+        }
+
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public static void Fill<T>(Span<T> ts, T t)
+        {
+            ts.Fill(t);
+        }
+#endif
 
         public static byte[] CopyOf(byte[] data, int newLength)
         {
@@ -857,6 +915,17 @@ namespace Org.BouncyCastle.Utilities
             return result;
         }
 
+        public static T[] Prepend<T>(T[] a, T b)
+        {
+            if (a == null)
+                return new T[1]{ b };
+
+            T[] result = new T[1 + a.Length];
+            result[0] = b;
+            a.CopyTo(result, 1);
+            return result;
+        }
+
         public static byte[] Reverse(byte[] a)
         {
             if (a == null)
@@ -889,36 +958,13 @@ namespace Org.BouncyCastle.Utilities
             return result;
         }
 
-        public static byte[] ReverseInPlace(byte[] a)
+        public static T[] ReverseInPlace<T>(T[] array)
         {
-            if (null == a)
+            if (null == array)
                 return null;
 
-            int p1 = 0, p2 = a.Length - 1;
-            while (p1 < p2)
-            {
-                byte t1 = a[p1], t2 = a[p2];
-                a[p1++] = t2;
-                a[p2--] = t1;
-            }
-
-            return a;
-        }
-
-        public static int[] ReverseInPlace(int[] a)
-        {
-            if (null == a)
-                return null;
-
-            int p1 = 0, p2 = a.Length - 1;
-            while (p1 < p2)
-            {
-                int t1 = a[p1], t2 = a[p2];
-                a[p1++] = t2;
-                a[p2--] = t1;
-            }
-
-            return a;
+            Array.Reverse(array);
+            return array;
         }
 
         public static void Clear(byte[] data)

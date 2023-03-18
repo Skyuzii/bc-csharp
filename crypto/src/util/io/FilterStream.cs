@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Org.BouncyCastle.Utilities.IO
 {
@@ -10,10 +12,7 @@ namespace Org.BouncyCastle.Utilities.IO
 
         public FilterStream(Stream s)
         {
-            if (s == null)
-                throw new ArgumentNullException(nameof(s));
-
-            this.s = s;
+            this.s = s ?? throw new ArgumentNullException(nameof(s));
         }
         public override bool CanRead
         {
@@ -26,6 +25,16 @@ namespace Org.BouncyCastle.Utilities.IO
         public override bool CanWrite
         {
             get { return s.CanWrite; }
+        }
+#if NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public override void CopyTo(Stream destination, int bufferSize)
+        {
+            Streams.CopyTo(s, destination, bufferSize);
+        }
+#endif
+        public override Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
+        {
+            return Streams.CopyToAsync(s, destination, bufferSize, cancellationToken);
         }
         public override void Flush()
         {
@@ -44,6 +53,16 @@ namespace Org.BouncyCastle.Utilities.IO
         {
             return s.Read(buffer, offset, count);
         }
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public override int Read(Span<byte> buffer)
+        {
+            return s.Read(buffer);
+        }
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return Streams.ReadAsync(s, buffer, cancellationToken);
+        }
+#endif
         public override int ReadByte()
         {
             return s.ReadByte();
@@ -60,6 +79,16 @@ namespace Org.BouncyCastle.Utilities.IO
         {
             s.Write(buffer, offset, count);
         }
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            s.Write(buffer);
+        }
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return Streams.WriteAsync(s, buffer, cancellationToken);
+        }
+#endif
         public override void WriteByte(byte value)
         {
             s.WriteByte(value);

@@ -2,13 +2,9 @@ using System;
 using System.Text;
 
 using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Security;
 
 namespace Org.BouncyCastle.Pkix
 {
-	/// <summary>
-	/// Summary description for PkixCertPathValidatorResult.
-	/// </summary>
 	public class PkixCertPathValidatorResult
 		//: ICertPathValidatorResult
 	{
@@ -31,24 +27,13 @@ namespace Org.BouncyCastle.Pkix
 			get { return this.subjectPublicKey; }
 		}
 
-		public PkixCertPathValidatorResult(
-			TrustAnchor				trustAnchor,
-			PkixPolicyNode			policyTree,
-			AsymmetricKeyParameter	subjectPublicKey)
+		public PkixCertPathValidatorResult(TrustAnchor trustAnchor, PkixPolicyNode policyTree,
+			AsymmetricKeyParameter subjectPublicKey)
 		{
-			if (subjectPublicKey == null)
-			{
-				throw new NullReferenceException("subjectPublicKey must be non-null");
-			}
-			if (trustAnchor == null)
-			{
-				throw new NullReferenceException("trustAnchor must be non-null");
-			}
-			
-			this.trustAnchor = trustAnchor;
-			this.policyTree = policyTree;
-			this.subjectPublicKey = subjectPublicKey;
-		}
+			this.trustAnchor = trustAnchor ?? throw new ArgumentNullException(nameof(trustAnchor));
+            this.policyTree = policyTree;
+			this.subjectPublicKey = subjectPublicKey ?? throw new ArgumentNullException(nameof(subjectPublicKey));
+        }
 
 		public object Clone()
 		{

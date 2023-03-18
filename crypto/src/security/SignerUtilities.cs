@@ -10,11 +10,12 @@ using Org.BouncyCastle.Asn1.GM;
 using Org.BouncyCastle.Asn1.Nist;
 using Org.BouncyCastle.Asn1.Oiw;
 using Org.BouncyCastle.Asn1.Pkcs;
+using Org.BouncyCastle.Asn1.Rosstandart;
 using Org.BouncyCastle.Asn1.TeleTrust;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1.X9;
-using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Engines;
 using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.Utilities;
@@ -27,9 +28,10 @@ namespace Org.BouncyCastle.Security
     /// </summary>
     public static class SignerUtilities
     {
-        internal static readonly IDictionary<string, string> AlgorithmMap =
+        private static readonly IDictionary<string, string> AlgorithmMap =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        internal static readonly IDictionary<string, DerObjectIdentifier> Oids =
+        private static readonly HashSet<string> NoRandom = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly IDictionary<string, DerObjectIdentifier> Oids =
             new Dictionary<string, DerObjectIdentifier>(StringComparer.OrdinalIgnoreCase);
 
         static SignerUtilities()
@@ -367,12 +369,32 @@ namespace Org.BouncyCastle.Security
             AlgorithmMap["GOST-3410"] = "GOST3410";
             AlgorithmMap["GOST-3410-94"] = "GOST3410";
             AlgorithmMap["GOST3411WITHGOST3410"] = "GOST3410";
+            AlgorithmMap["GOST3411/GOST3410"] = "GOST3410";
             AlgorithmMap[CryptoProObjectIdentifiers.GostR3411x94WithGostR3410x94.Id] = "GOST3410";
 
             AlgorithmMap["ECGOST-3410"] = "ECGOST3410";
-            AlgorithmMap["ECGOST-3410-2001"] = "ECGOST3410";
+            AlgorithmMap["GOST-3410-2001"] = "ECGOST3410";
             AlgorithmMap["GOST3411WITHECGOST3410"] = "ECGOST3410";
+            AlgorithmMap["GOST3411/ECGOST3410"] = "ECGOST3410";
             AlgorithmMap[CryptoProObjectIdentifiers.GostR3411x94WithGostR3410x2001.Id] = "ECGOST3410";
+
+            AlgorithmMap["GOST-3410-2012-256"] = "ECGOST3410-2012-256";
+            AlgorithmMap["GOST3411WITHECGOST3410-2012-256"] = "ECGOST3410-2012-256";
+            AlgorithmMap["GOST3411-2012-256WITHECGOST3410"] = "ECGOST3410-2012-256";
+            AlgorithmMap["GOST3411-2012-256WITHECGOST3410-2012-256"] = "ECGOST3410-2012-256";
+            AlgorithmMap["GOST3411-2012-256/ECGOST3410"] = "ECGOST3410-2012-256";
+            AlgorithmMap["GOST3411-2012-256/ECGOST3410-2012-256"] = "ECGOST3410-2012-256";
+            AlgorithmMap[RosstandartObjectIdentifiers.id_tc26_signwithdigest_gost_3410_12_256.Id] =
+                "ECGOST3410-2012-256";
+
+            AlgorithmMap["GOST-3410-2012-512"] = "ECGOST3410-2012-512";
+            AlgorithmMap["GOST3411WITHECGOST3410-2012-512"] = "ECGOST3410-2012-512";
+            AlgorithmMap["GOST3411-2012-512WITHECGOST3410"] = "ECGOST3410-2012-512";
+            AlgorithmMap["GOST3411-2012-512WITHECGOST3410-2012-512"] = "ECGOST3410-2012-512";
+            AlgorithmMap["GOST3411-2012-512/ECGOST3410"] = "ECGOST3410-2012-512";
+            AlgorithmMap["GOST3411-2012-512/ECGOST3410-2012-512"] = "ECGOST3410-2012-512";
+            AlgorithmMap[RosstandartObjectIdentifiers.id_tc26_signwithdigest_gost_3410_12_512.Id] =
+                "ECGOST3410-2012-512";
 
             AlgorithmMap["ED25519"] = "Ed25519";
             AlgorithmMap[EdECObjectIdentifiers.id_Ed25519.Id] = "Ed25519";
@@ -386,6 +408,14 @@ namespace Org.BouncyCastle.Security
             AlgorithmMap[GMObjectIdentifiers.sm2sign_with_sha256.Id] = "SHA256withSM2";
             AlgorithmMap["SM3WITHSM2"] = "SM3withSM2";
             AlgorithmMap[GMObjectIdentifiers.sm2sign_with_sm3.Id] = "SM3withSM2";
+
+            NoRandom.Add("Ed25519");
+            NoRandom.Add(EdECObjectIdentifiers.id_Ed25519.Id);
+            NoRandom.Add("Ed25519ctx");
+            NoRandom.Add("Ed25519ph");
+            NoRandom.Add("Ed448");
+            NoRandom.Add(EdECObjectIdentifiers.id_Ed448.Id);
+            NoRandom.Add("Ed448ph");
 
             Oids["MD2withRSA"] = PkcsObjectIdentifiers.MD2WithRsaEncryption;
             Oids["MD4withRSA"] = PkcsObjectIdentifiers.MD4WithRsaEncryption;
@@ -438,6 +468,9 @@ namespace Org.BouncyCastle.Security
 
             Oids["GOST3410"] = CryptoProObjectIdentifiers.GostR3411x94WithGostR3410x94;
             Oids["ECGOST3410"] = CryptoProObjectIdentifiers.GostR3411x94WithGostR3410x2001;
+
+            Oids["ECGOST3410-2012-256"] = RosstandartObjectIdentifiers.id_tc26_signwithdigest_gost_3410_12_256;
+            Oids["ECGOST3410-2012-512"] = RosstandartObjectIdentifiers.id_tc26_signwithdigest_gost_3410_12_512;
 
             Oids["Ed25519"] = EdECObjectIdentifiers.id_Ed25519;
             Oids["Ed448"] = EdECObjectIdentifiers.id_Ed448;
@@ -495,6 +528,11 @@ namespace Org.BouncyCastle.Security
             return DerNull.Instance;
         }
 
+        private static string GetMechanism(string algorithm)
+        {
+            return AlgorithmMap.TryGetValue(algorithm, out var v) ? v : algorithm.ToUpperInvariant();
+        }
+
         private static Asn1Encodable GetPssX509Parameters(
             string	digestName)
         {
@@ -512,6 +550,9 @@ namespace Org.BouncyCastle.Security
 
         public static ISigner GetSigner(DerObjectIdentifier id)
         {
+            if (id == null)
+                throw new ArgumentNullException(nameof(id));
+
             return GetSigner(id.Id);
         }
 
@@ -520,8 +561,17 @@ namespace Org.BouncyCastle.Security
             if (algorithm == null)
                 throw new ArgumentNullException(nameof(algorithm));
 
-            string mechanism = CollectionUtilities.GetValueOrKey(AlgorithmMap, algorithm.ToUpperInvariant());
+            string mechanism = GetMechanism(algorithm);
 
+            var signer = GetSignerForMechanism(mechanism);
+            if (signer == null)
+                throw new SecurityUtilityException("Signer " + algorithm + " not recognised.");
+
+            return signer;
+        }
+
+        private static ISigner GetSignerForMechanism(string mechanism)
+        {
             if (Platform.StartsWith(mechanism, "Ed"))
             {
                 if (mechanism.Equals("Ed25519"))
@@ -614,22 +664,37 @@ namespace Org.BouncyCastle.Security
             {
                 return new Gost3410DigestSigner(new Gost3410Signer(), new Gost3411Digest());
             }
-            if (mechanism.Equals("ECGOST3410"))
+
+            if (Platform.StartsWith(mechanism, "ECGOST3410"))
             {
-                return new Gost3410DigestSigner(new ECGost3410Signer(), new Gost3411Digest());
+                if (mechanism.Equals("ECGOST3410"))
+                {
+                    return new Gost3410DigestSigner(new ECGost3410Signer(), new Gost3411Digest());
+                }
+                if (mechanism.Equals("ECGOST3410-2012-256"))
+                {
+                    return new Gost3410DigestSigner(new ECGost3410Signer(), new Gost3411_2012_256Digest());
+                }
+                if (mechanism.Equals("ECGOST3410-2012-512"))
+                {
+                    return new Gost3410DigestSigner(new ECGost3410Signer(), new Gost3411_2012_512Digest());
+                }
             }
 
-            if (mechanism.Equals("SHA1WITHRSA/ISO9796-2"))
+            if (Platform.EndsWith(mechanism, "/ISO9796-2"))
             {
-                return new Iso9796d2Signer(new RsaBlindedEngine(), new Sha1Digest(), true);
-            }
-            if (mechanism.Equals("MD5WITHRSA/ISO9796-2"))
-            {
-                return new Iso9796d2Signer(new RsaBlindedEngine(), new MD5Digest(), true);
-            }
-            if (mechanism.Equals("RIPEMD160WITHRSA/ISO9796-2"))
-            {
-                return new Iso9796d2Signer(new RsaBlindedEngine(), new RipeMD160Digest(), true);
+                if (mechanism.Equals("SHA1WITHRSA/ISO9796-2"))
+                {
+                    return new Iso9796d2Signer(new RsaBlindedEngine(), new Sha1Digest(), true);
+                }
+                if (mechanism.Equals("MD5WITHRSA/ISO9796-2"))
+                {
+                    return new Iso9796d2Signer(new RsaBlindedEngine(), new MD5Digest(), true);
+                }
+                if (mechanism.Equals("RIPEMD160WITHRSA/ISO9796-2"))
+                {
+                    return new Iso9796d2Signer(new RsaBlindedEngine(), new RipeMD160Digest(), true);
+                }
             }
 
             if (Platform.EndsWith(mechanism, "/X9.31"))
@@ -640,19 +705,20 @@ namespace Org.BouncyCastle.Security
                 {
                     int endPos = withPos + "WITH".Length;
 
-                    string digestName = x931.Substring(0, withPos);
-                    IDigest digest = DigestUtilities.GetDigest(digestName);
-
                     string cipherName = x931.Substring(endPos, x931.Length - endPos);
                     if (cipherName.Equals("RSA"))
                     {
                         IAsymmetricBlockCipher cipher = new RsaBlindedEngine();
+
+                        string digestName = x931.Substring(0, withPos);
+                        IDigest digest = DigestUtilities.GetDigest(digestName);
+
                         return new X931Signer(cipher, digest);
                     }
                 }
             }
 
-            throw new SecurityUtilityException("Signer " + algorithm + " not recognised.");
+            return null;
         }
 
         public static string GetEncodingName(DerObjectIdentifier oid)
@@ -660,15 +726,36 @@ namespace Org.BouncyCastle.Security
             return CollectionUtilities.GetValueOrNull(AlgorithmMap, oid.Id);
         }
 
-        public static ISigner InitSigner(DerObjectIdentifier algorithmOid, bool forSigning, AsymmetricKeyParameter privateKey, SecureRandom random)
+        // TODO Rename 'privateKey' to 'key'
+        public static ISigner InitSigner(DerObjectIdentifier algorithmOid, bool forSigning,
+            AsymmetricKeyParameter privateKey, SecureRandom random)
         {
+            if (algorithmOid == null)
+                throw new ArgumentNullException(nameof(algorithmOid));
+
             return InitSigner(algorithmOid.Id, forSigning, privateKey, random);
         }
 
-        public static ISigner InitSigner(string algorithm, bool forSigning, AsymmetricKeyParameter privateKey, SecureRandom random)
+        // TODO Rename 'privateKey' to 'key'
+        public static ISigner InitSigner(string algorithm, bool forSigning, AsymmetricKeyParameter privateKey,
+            SecureRandom random)
         {
-            ISigner signer = GetSigner(algorithm);
-            signer.Init(forSigning, ParameterUtilities.WithRandom(privateKey, random));
+            if (algorithm == null)
+                throw new ArgumentNullException(nameof(algorithm));
+
+            string mechanism = GetMechanism(algorithm);
+
+            var signer = GetSignerForMechanism(mechanism);
+            if (signer == null)
+                throw new SecurityUtilityException("Signer " + algorithm + " not recognised.");
+
+            ICipherParameters cipherParameters = privateKey;
+            if (forSigning && !NoRandom.Contains(mechanism))
+            {
+                cipherParameters = ParameterUtilities.WithRandom(cipherParameters, random);
+            }
+
+            signer.Init(forSigning, cipherParameters);
             return signer;
         }
     }

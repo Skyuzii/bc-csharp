@@ -73,10 +73,12 @@ namespace Org.BouncyCastle.Crypto.Signers
 		}
 #endif
 
-		public virtual byte[] GenerateSignature()
+        public virtual int GetMaxSignatureSize() => encoding.GetMaxEncodingSize(GetOrder());
+
+        public virtual byte[] GenerateSignature()
 		{
 			if (!forSigning)
-				throw new InvalidOperationException("DSADigestSigner not initialised for signature generation.");
+				throw new InvalidOperationException("DsaDigestSigner not initialized for signature generation.");
 
 			byte[] hash = new byte[digest.GetDigestSize()];
 			digest.DoFinal(hash, 0);
@@ -96,7 +98,7 @@ namespace Org.BouncyCastle.Crypto.Signers
         public virtual bool VerifySignature(byte[] signature)
 		{
 			if (forSigning)
-				throw new InvalidOperationException("DSADigestSigner not initialised for verification");
+				throw new InvalidOperationException("DsaDigestSigner not initialized for verification");
 
 			byte[] hash = new byte[digest.GetDigestSize()];
 			digest.DoFinal(hash, 0);

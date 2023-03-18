@@ -61,9 +61,8 @@ namespace Org.BouncyCastle.Crypto.Modes
             ICipherParameters parameters)
         {
             this.encrypting = forEncryption;
-            if (parameters is ParametersWithIV)
+            if (parameters is ParametersWithIV ivParam)
             {
-                ParametersWithIV ivParam = (ParametersWithIV) parameters;
                 byte[] iv = ivParam.GetIV();
                 int diff = IV.Length - iv.Length;
                 Array.Copy(iv, 0, IV, diff, iv.Length);
@@ -129,7 +128,7 @@ namespace Org.BouncyCastle.Crypto.Modes
 #endif
 
 #if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
-        public int EncryptBlock(ReadOnlySpan<byte> input, Span<byte> output)
+        private int EncryptBlock(ReadOnlySpan<byte> input, Span<byte> output)
         {
             Check.DataLength(input, blockSize, "input buffer too short");
             Check.OutputLength(output, blockSize, "output buffer too short");
@@ -150,7 +149,7 @@ namespace Org.BouncyCastle.Crypto.Modes
             return blockSize;
         }
 
-        public int DecryptBlock(ReadOnlySpan<byte> input, Span<byte> output)
+        private int DecryptBlock(ReadOnlySpan<byte> input, Span<byte> output)
         {
             Check.DataLength(input, blockSize, "input buffer too short");
             Check.OutputLength(output, blockSize, "output buffer too short");
@@ -171,7 +170,7 @@ namespace Org.BouncyCastle.Crypto.Modes
             return blockSize;
         }
 #else
-        public int EncryptBlock(byte[] input, int inOff, byte[] outBytes, int outOff)
+        private int EncryptBlock(byte[] input, int inOff, byte[] outBytes, int outOff)
         {
             Check.DataLength(input, inOff, blockSize, "input buffer too short");
             Check.OutputLength(outBytes, outOff, blockSize, "output buffer too short");
@@ -192,7 +191,7 @@ namespace Org.BouncyCastle.Crypto.Modes
             return blockSize;
         }
 
-        public int DecryptBlock(byte[] input, int inOff, byte[] outBytes, int outOff)
+        private int DecryptBlock(byte[] input, int inOff, byte[] outBytes, int outOff)
         {
             Check.DataLength(input, inOff, blockSize, "input buffer too short");
             Check.OutputLength(outBytes, outOff, blockSize, "output buffer too short");

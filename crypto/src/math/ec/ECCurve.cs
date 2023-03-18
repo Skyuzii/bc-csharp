@@ -90,6 +90,8 @@ namespace Org.BouncyCastle.Math.EC
         protected ECEndomorphism m_endomorphism = null;
         protected ECMultiplier m_multiplier = null;
 
+        private IDictionary<string, PreCompInfo> m_preCompTable = null;
+
         protected ECCurve(IFiniteField field)
         {
             this.m_field = field;
@@ -130,11 +132,8 @@ namespace Org.BouncyCastle.Math.EC
 
         protected virtual ECMultiplier CreateDefaultMultiplier()
         {
-            GlvEndomorphism glvEndomorphism = m_endomorphism as GlvEndomorphism;
-            if (glvEndomorphism != null)
-            {
+            if (m_endomorphism is GlvEndomorphism glvEndomorphism)
                 return new GlvMultiplier(this, glvEndomorphism);
-            }
 
             return new WNafL2RMultiplier();
         }
@@ -160,6 +159,32 @@ namespace Org.BouncyCastle.Math.EC
             lock (table)
             {
                 return table.TryGetValue(name, out var preCompInfo) ? preCompInfo : null;
+            }
+        }
+
+        internal virtual PreCompInfo Precompute(string name, IPreCompCallback callback)
+        {
+            IDictionary<string, PreCompInfo> table;
+            lock (this)
+            {
+                table = m_preCompTable;
+                if (null == table)
+                {
+                    m_preCompTable = table = new Dictionary<string, PreCompInfo>();
+                }
+            }
+
+            lock (table)
+            {
+                PreCompInfo existing = table.TryGetValue(name, out var preCompInfo) ? preCompInfo : null;
+                PreCompInfo result = callback.Precompute(existing);
+
+                if (result != existing)
+                {
+                    table[name] = result;
+                }
+
+                return result;
             }
         }
 
@@ -436,67 +461,143 @@ namespace Org.BouncyCastle.Math.EC
          */
         public virtual ECPoint DecodePoint(byte[] encoded)
         {
-            ECPoint p = null;
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            return DecodePoint(encoded.AsSpan());
+#else
+            ECPoint p;
             int expectedLength = (FieldSize + 7) / 8;
 
             byte type = encoded[0];
             switch (type)
             {
-                case 0x00: // infinity
-                {
-                    if (encoded.Length != 1)
-                        throw new ArgumentException("Incorrect length for infinity encoding", "encoded");
+            case 0x00: // infinity
+            {
+                if (encoded.Length != 1)
+                    throw new ArgumentException("Incorrect length for infinity encoding", "encoded");
 
-                    p = Infinity;
-                    break;
-                }
+                p = Infinity;
+                break;
+            }
 
-                case 0x02: // compressed
-                case 0x03: // compressed
-                {
-                    if (encoded.Length != (expectedLength + 1))
-                        throw new ArgumentException("Incorrect length for compressed encoding", "encoded");
+            case 0x02: // compressed
+            case 0x03: // compressed
+            {
+                if (encoded.Length != (expectedLength + 1))
+                    throw new ArgumentException("Incorrect length for compressed encoding", "encoded");
 
-                    int yTilde = type & 1;
-                    BigInteger X = new BigInteger(1, encoded, 1, expectedLength);
+                int yTilde = type & 1;
+                BigInteger X = new BigInteger(1, encoded, 1, expectedLength);
 
-                    p = DecompressPoint(yTilde, X);
-                    if (!p.ImplIsValid(true, true))
-                        throw new ArgumentException("Invalid point");
+                p = DecompressPoint(yTilde, X);
+                if (!p.ImplIsValid(true, true))
+                    throw new ArgumentException("Invalid point");
 
-                    break;
-                }
+                break;
+            }
 
-                case 0x04: // uncompressed
-                {
-                    if (encoded.Length != (2 * expectedLength + 1))
-                        throw new ArgumentException("Incorrect length for uncompressed encoding", "encoded");
+            case 0x04: // uncompressed
+            {
+                if (encoded.Length != (2 * expectedLength + 1))
+                    throw new ArgumentException("Incorrect length for uncompressed encoding", "encoded");
 
-                    BigInteger X = new BigInteger(1, encoded, 1, expectedLength);
-                    BigInteger Y = new BigInteger(1, encoded, 1 + expectedLength, expectedLength);
+                BigInteger X = new BigInteger(1, encoded, 1, expectedLength);
+                BigInteger Y = new BigInteger(1, encoded, 1 + expectedLength, expectedLength);
 
-                    p = ValidatePoint(X, Y);
-                    break;
-                }
+                p = ValidatePoint(X, Y);
+                break;
+            }
 
-                case 0x06: // hybrid
-                case 0x07: // hybrid
-                {
-                    if (encoded.Length != (2 * expectedLength + 1))
-                        throw new ArgumentException("Incorrect length for hybrid encoding", "encoded");
+            case 0x06: // hybrid
+            case 0x07: // hybrid
+            {
+                if (encoded.Length != (2 * expectedLength + 1))
+                    throw new ArgumentException("Incorrect length for hybrid encoding", "encoded");
 
-                    BigInteger X = new BigInteger(1, encoded, 1, expectedLength);
-                    BigInteger Y = new BigInteger(1, encoded, 1 + expectedLength, expectedLength);
+                BigInteger X = new BigInteger(1, encoded, 1, expectedLength);
+                BigInteger Y = new BigInteger(1, encoded, 1 + expectedLength, expectedLength);
 
-                    if (Y.TestBit(0) != (type == 0x07))
-                        throw new ArgumentException("Inconsistent Y coordinate in hybrid encoding", "encoded");
+                if (Y.TestBit(0) != (type == 0x07))
+                    throw new ArgumentException("Inconsistent Y coordinate in hybrid encoding", "encoded");
 
-                    p = ValidatePoint(X, Y);
-                    break;
-                }
+                p = ValidatePoint(X, Y);
+                break;
+            }
 
-                default:
-                    throw new FormatException("Invalid point encoding " + type);
+            default:
+                throw new FormatException("Invalid point encoding " + type);
+            }
+
+            if (type != 0x00 && p.IsInfinity)
+                throw new ArgumentException("Invalid infinity encoding", "encoded");
+
+            return p;
+#endif
+        }
+
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public virtual ECPoint DecodePoint(ReadOnlySpan<byte> encoded)
+        {
+            ECPoint p;
+            int expectedLength = (FieldSize + 7) / 8;
+
+            byte type = encoded[0];
+            switch (type)
+            {
+            case 0x00: // infinity
+            {
+                if (encoded.Length != 1)
+                    throw new ArgumentException("Incorrect length for infinity encoding", "encoded");
+
+                p = Infinity;
+                break;
+            }
+
+            case 0x02: // compressed
+            case 0x03: // compressed
+            {
+                if (encoded.Length != (expectedLength + 1))
+                    throw new ArgumentException("Incorrect length for compressed encoding", "encoded");
+
+                int yTilde = type & 1;
+                BigInteger X = new BigInteger(1, encoded[1..]);
+
+                p = DecompressPoint(yTilde, X);
+                if (!p.ImplIsValid(true, true))
+                    throw new ArgumentException("Invalid point");
+
+                break;
+            }
+
+            case 0x04: // uncompressed
+            {
+                if (encoded.Length != (2 * expectedLength + 1))
+                    throw new ArgumentException("Incorrect length for uncompressed encoding", "encoded");
+
+                BigInteger X = new BigInteger(1, encoded[1..(1 + expectedLength)]);
+                BigInteger Y = new BigInteger(1, encoded[(1 + expectedLength)..]);
+
+                p = ValidatePoint(X, Y);
+                break;
+            }
+
+            case 0x06: // hybrid
+            case 0x07: // hybrid
+            {
+                if (encoded.Length != (2 * expectedLength + 1))
+                    throw new ArgumentException("Incorrect length for hybrid encoding", "encoded");
+
+                BigInteger X = new BigInteger(1, encoded[1..(1 + expectedLength)]);
+                BigInteger Y = new BigInteger(1, encoded[(1 + expectedLength)..]);
+
+                if (Y.TestBit(0) != (type == 0x07))
+                    throw new ArgumentException("Inconsistent Y coordinate in hybrid encoding", "encoded");
+
+                p = ValidatePoint(X, Y);
+                break;
+            }
+
+            default:
+                throw new FormatException("Invalid point encoding " + type);
             }
 
             if (type != 0x00 && p.IsInfinity)
@@ -504,6 +605,7 @@ namespace Org.BouncyCastle.Math.EC
 
             return p;
         }
+#endif
 
         private class DefaultLookupTable
             : AbstractECLookupTable
@@ -573,9 +675,40 @@ namespace Org.BouncyCastle.Math.EC
     public abstract class AbstractFpCurve
         : ECCurve
     {
+        private static readonly HashSet<BigInteger> KnownQs = new HashSet<BigInteger>();
+
         protected AbstractFpCurve(BigInteger q)
+            : this(q, false)
+        {
+        }
+
+        internal AbstractFpCurve(BigInteger q, bool isInternal)
             : base(FiniteFields.GetPrimeField(q))
         {
+            if (!isInternal)
+            {
+                bool unknownQ;
+                lock (KnownQs) unknownQ = !KnownQs.Contains(q);
+
+                if (unknownQ)
+                {
+                    int maxBitLength = ImplGetInteger("Org.BouncyCastle.EC.Fp_MaxSize", 1042); // 2 * 521
+                    int certainty = ImplGetInteger("Org.BouncyCastle.EC.Fp_Certainty", 100);
+
+                    int qBitLength = q.BitLength;
+                    if (maxBitLength < qBitLength)
+                        throw new ArgumentException("Fp q value out of range");
+
+                    if (Primes.HasAnySmallFactors(q) ||
+                        !Primes.IsMRProbablePrime(q, SecureRandom.ArbitraryRandom,
+                            ImplGetNumberOfIterations(qBitLength, certainty)))
+                    {
+                        throw new ArgumentException("Fp q value not prime");
+                    }
+                }
+            }
+
+            lock (KnownQs) KnownQs.Add(q);
         }
 
         public override bool IsValidFieldElement(BigInteger x)
@@ -628,6 +761,47 @@ namespace Org.BouncyCastle.Math.EC
             return CreateRawPoint(x, y);
         }
 
+        private static int ImplGetInteger(string envVariable, int defaultValue)
+        {
+            string v = Platform.GetEnvironmentVariable(envVariable);
+            if (v == null)
+                return defaultValue;
+
+            return int.Parse(v);
+        }
+
+        private static int ImplGetNumberOfIterations(int bits, int certainty)
+        {
+            /*
+             * NOTE: We enforce a minimum 'certainty' of 100 for bits >= 1024 (else 80). Where the
+             * certainty is higher than the FIPS 186-4 tables (C.2/C.3) cater to, extra iterations
+             * are added at the "worst case rate" for the excess.
+             */
+            if (bits >= 1536)
+            {
+                return certainty <= 100 ? 3
+                    : certainty <= 128 ? 4
+                    : 4 + (certainty - 128 + 1) / 2;
+            }
+            else if (bits >= 1024)
+            {
+                return certainty <= 100 ? 4
+                    : certainty <= 112 ? 5
+                    : 5 + (certainty - 112 + 1) / 2;
+            }
+            else if (bits >= 512)
+            {
+                return certainty <= 80 ? 5
+                    : certainty <= 100 ? 7
+                    : 7 + (certainty - 100 + 1) / 2;
+            }
+            else
+            {
+                return certainty <= 80 ? 40
+                    : 40 + (certainty - 80 + 1) / 2;
+            }
+        }
+
         private static BigInteger ImplRandomFieldElement(SecureRandom r, BigInteger p)
         {
             BigInteger x;
@@ -659,9 +833,6 @@ namespace Org.BouncyCastle.Math.EC
     {
         private const int FP_DEFAULT_COORDS = COORD_JACOBIAN_MODIFIED;
 
-        private static readonly HashSet<BigInteger> KnownQs = new HashSet<BigInteger>();
-        private static readonly SecureRandom random = new SecureRandom();
-
         protected readonly BigInteger m_q, m_r;
         protected readonly FpPoint m_infinity;
 
@@ -677,31 +848,8 @@ namespace Org.BouncyCastle.Math.EC
         }
 
         internal FpCurve(BigInteger q, BigInteger a, BigInteger b, BigInteger order, BigInteger cofactor, bool isInternal)
-            : base(q)
+            : base(q, isInternal)
         {
-            if (!isInternal)
-            {
-                bool unknownQ;
-                lock (KnownQs) unknownQ = !KnownQs.Contains(q);
-
-                if (unknownQ)
-                {
-                    int maxBitLength = AsInteger("Org.BouncyCastle.EC.Fp_MaxSize", 1042); // 2 * 521
-                    int certainty = AsInteger("Org.BouncyCastle.EC.Fp_Certainty", 100);
-
-                    int qBitLength = q.BitLength;
-                    if (maxBitLength < qBitLength)
-                        throw new ArgumentException("Fp q value out of range");
-
-                    if (Primes.HasAnySmallFactors(q) ||
-                        !Primes.IsMRProbablePrime(q, random, GetNumberOfIterations(qBitLength, certainty)))
-                    {
-                        throw new ArgumentException("Fp q value not prime");
-                    }
-                }
-            }
-
-            lock (KnownQs) KnownQs.Add(q);
             this.m_q = q;
 
             this.m_r = FpFieldElement.CalculateResidue(q);
@@ -716,7 +864,7 @@ namespace Org.BouncyCastle.Math.EC
 
         internal FpCurve(BigInteger q, BigInteger r, ECFieldElement a, ECFieldElement b, BigInteger order,
             BigInteger cofactor)
-            : base(q)
+            : base(q, true)
         {
             this.m_q = q;
             this.m_r = r;
@@ -801,50 +949,6 @@ namespace Org.BouncyCastle.Math.EC
 
             return base.ImportPoint(p);
         }
-
-        private int GetNumberOfIterations(int bits, int certainty)
-        {
-            /*
-             * NOTE: We enforce a minimum 'certainty' of 100 for bits >= 1024 (else 80). Where the
-             * certainty is higher than the FIPS 186-4 tables (C.2/C.3) cater to, extra iterations
-             * are added at the "worst case rate" for the excess.
-             */
-            if (bits >= 1536)
-            {
-                return  certainty <= 100 ? 3
-                    :   certainty <= 128 ? 4
-                    :   4 + (certainty - 128 + 1) / 2;
-            }
-            else if (bits >= 1024)
-            {
-                return  certainty <= 100 ? 4
-                    :   certainty <= 112 ? 5
-                    :   5 + (certainty - 112 + 1) / 2;
-            }
-            else if (bits >= 512)
-            {
-                return  certainty <= 80  ? 5
-                    :   certainty <= 100 ? 7
-                    :   7 + (certainty - 100 + 1) / 2;
-            }
-            else
-            {
-                return  certainty <= 80  ? 40
-                    :   40 + (certainty - 80 + 1) / 2;
-            }
-        }
-
-        int AsInteger(string envVariable, int defaultValue)
-        {
-            string v = Platform.GetEnvironmentVariable(envVariable);
-
-            if (v == null)
-            {
-                return defaultValue;
-            }
-
-            return int.Parse(v);
-        }
     }
 
     public abstract class AbstractF2mCurve
@@ -854,13 +958,6 @@ namespace Org.BouncyCastle.Math.EC
         {
             return new LongArray(x).ModInverse(m, ks).ToBigInteger();
         }
-
-        /**
-         * The auxiliary values <code>s<sub>0</sub></code> and
-         * <code>s<sub>1</sub></code> used for partial modular reduction for
-         * Koblitz curves.
-         */
-        private BigInteger[] si = null;
 
         private static IFiniteField BuildField(int m, int k1, int k2, int k3)
         {
@@ -1025,26 +1122,6 @@ namespace Org.BouncyCastle.Math.EC
             while (gamma.IsZero);
 
             return z;
-        }
-
-        /**
-         * @return the auxiliary values <code>s<sub>0</sub></code> and
-         * <code>s<sub>1</sub></code> used for partial modular reduction for
-         * Koblitz curves.
-         */
-        internal virtual BigInteger[] GetSi()
-        {
-            if (si == null)
-            {
-                lock (this)
-                {
-                    if (si == null)
-                    {
-                        si = Tnaf.GetSi(this);
-                    }
-                }
-            }
-            return si;
         }
 
         /**

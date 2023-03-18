@@ -1,20 +1,18 @@
-
 using Org.BouncyCastle.Crypto;
 
 namespace Org.BouncyCastle.Pqc.Crypto.Picnic
 {
-    public class PicnicKeyParameters
+    public abstract class PicnicKeyParameters
         : AsymmetricKeyParameter
     {
+        private readonly PicnicParameters m_parameters;
 
-        PicnicParameters parameters;
-
-        public PicnicKeyParameters(bool isPrivate, PicnicParameters parameters)
+        internal PicnicKeyParameters(bool isPrivate, PicnicParameters parameters)
             : base(isPrivate)
         {
-            this.parameters = parameters;
+            m_parameters = parameters;
         }
 
-        public PicnicParameters Parameters => parameters;
+        public PicnicParameters Parameters => m_parameters;
     }
 }

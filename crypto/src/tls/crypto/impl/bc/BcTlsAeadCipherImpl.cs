@@ -6,11 +6,11 @@ using Org.BouncyCastle.Crypto.Parameters;
 
 namespace Org.BouncyCastle.Tls.Crypto.Impl.BC
 {
-    internal sealed class BcTlsAeadCipherImpl
+    internal class BcTlsAeadCipherImpl
         : TlsAeadCipherImpl
     {
         private readonly bool m_isEncrypting;
-        private readonly IAeadCipher m_cipher;
+        internal readonly IAeadCipher m_cipher;
 
         private KeyParameter key;
 
@@ -25,6 +25,13 @@ namespace Org.BouncyCastle.Tls.Crypto.Impl.BC
             this.key = new KeyParameter(key, keyOff, keyLen);
         }
 
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public void SetKey(ReadOnlySpan<byte> key)
+        {
+            this.key = new KeyParameter(key);
+        }
+#endif
+
         public void Init(byte[] nonce, int macSize, byte[] additionalData)
         {
             m_cipher.Init(m_isEncrypting, new AeadParameters(key, macSize * 8, nonce, additionalData));
@@ -35,7 +42,7 @@ namespace Org.BouncyCastle.Tls.Crypto.Impl.BC
             return m_cipher.GetOutputSize(inputLength);
         }
 
-        public int DoFinal(byte[] input, int inputOffset, int inputLength, byte[] output, int outputOffset)
+        public virtual int DoFinal(byte[] input, int inputOffset, int inputLength, byte[] output, int outputOffset)
         {
             int len = m_cipher.ProcessBytes(input, inputOffset, inputLength, output, outputOffset);
 
@@ -49,6 +56,11 @@ namespace Org.BouncyCastle.Tls.Crypto.Impl.BC
             }
 
             return len;
+        }
+
+        public void Reset()
+        {
+            m_cipher.Reset();
         }
     }
 }

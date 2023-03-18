@@ -4,12 +4,15 @@ using Org.BouncyCastle.Utilities;
 
 namespace Org.BouncyCastle.Pqc.Crypto.Cmce
 {
-    public class CmcePrivateKeyParameters
+    public sealed class CmcePrivateKeyParameters
         : CmceKeyParameters
     {
-        private byte[] privateKey;
+        internal readonly byte[] privateKey;
 
-        public byte[] PrivateKey => Arrays.Clone(privateKey);
+        public byte[] GetPrivateKey()
+        {
+            return Arrays.Clone(privateKey);
+        }
 
         public CmcePrivateKeyParameters(CmceParameters parameters, byte[] privateKey)
             : base(true, parameters)
@@ -38,7 +41,7 @@ namespace Org.BouncyCastle.Pqc.Crypto.Cmce
 
         public byte[] ReconstructPublicKey()
         {
-            CmceEngine engine = Parameters.Engine;
+            ICmceEngine engine = Parameters.Engine;
             byte[] pk = new byte[engine.PublicKeySize];
             engine.GeneratePublicKeyFromPrivateKey(privateKey);
             return pk;
@@ -49,14 +52,14 @@ namespace Org.BouncyCastle.Pqc.Crypto.Cmce
             return Arrays.Clone(privateKey);
         }
 
-        public byte[] Delta => Arrays.CopyOfRange(privateKey, 0, 32);
+        internal byte[] Delta => Arrays.CopyOfRange(privateKey, 0, 32);
 
-        public byte[] C => Arrays.CopyOfRange(privateKey, 32, 32 + 8);
+        internal byte[] C => Arrays.CopyOfRange(privateKey, 32, 32 + 8);
 
-        public byte[] G => Arrays.CopyOfRange(privateKey, 40, 40 + Parameters.T * 2);
+        internal byte[] G => Arrays.CopyOfRange(privateKey, 40, 40 + Parameters.T * 2);
 
-        public byte[] Alpha => Arrays.CopyOfRange(privateKey, 40 + Parameters.T * 2, privateKey.Length - 32);
+        internal byte[] Alpha => Arrays.CopyOfRange(privateKey, 40 + Parameters.T * 2, privateKey.Length - 32);
 
-        public byte[] S => Arrays.CopyOfRange(privateKey, privateKey.Length - 32, privateKey.Length);
+        internal byte[] S => Arrays.CopyOfRange(privateKey, privateKey.Length - 32, privateKey.Length);
     }
 }

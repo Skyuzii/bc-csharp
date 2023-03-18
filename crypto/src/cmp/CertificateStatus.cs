@@ -24,17 +24,11 @@ namespace Org.BouncyCastle.Cmp
             this.certStatus = certStatus;
         }
 
-        public PkiStatusInfo PkiStatusInfo
-        {
-            get { return certStatus.StatusInfo; }
-        }
+        public virtual PkiStatusInfo StatusInfo => certStatus.StatusInfo;
 
-        public BigInteger CertRequestId
-        {
-            get { return certStatus.CertReqID.Value; }
-        }
+        public virtual BigInteger CertRequestID => certStatus.CertReqID.Value;
 
-        public bool IsVerified(X509Certificate cert)
+        public virtual bool IsVerified(X509Certificate cert)
         {
             AlgorithmIdentifier digAlg = digestAlgFinder.Find(sigAlgFinder.Find(cert.SigAlgName));
             if (null == digAlg)
@@ -42,7 +36,7 @@ namespace Org.BouncyCastle.Cmp
 
             byte[] digest = DigestUtilities.CalculateDigest(digAlg.Algorithm, cert.GetEncoded());
 
-            return Arrays.ConstantTimeAreEqual(certStatus.CertHash.GetOctets(), digest);
+            return Arrays.FixedTimeEquals(certStatus.CertHash.GetOctets(), digest);
         }
     }
 }

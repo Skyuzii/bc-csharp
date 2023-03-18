@@ -109,43 +109,29 @@ namespace Org.BouncyCastle.Crypto.Signers
         /// <exception cref="ArgumentException">if wrong parameter type or a fixed
         /// salt is passed in which is the wrong length.
         /// </exception>
-        public virtual void Init(
-            bool				forSigning,
-            ICipherParameters	parameters)
+        public virtual void Init(bool forSigning, ICipherParameters parameters)
         {
             RsaKeyParameters kParam;
-            if (parameters is ParametersWithRandom)
+            if (parameters is ParametersWithRandom withRandom)
             {
-                ParametersWithRandom p = (ParametersWithRandom) parameters;
-
-                kParam = (RsaKeyParameters) p.Parameters;
-
-                if (forSigning)
-                {
-                    random = p.Random;
-                }
+                kParam = (RsaKeyParameters)withRandom.Parameters;
+                random = forSigning ? withRandom.Random : null;
             }
-            else if (parameters is ParametersWithSalt)
+            else if (parameters is ParametersWithSalt withSalt)
             {
                 if (!forSigning)
-                    throw new ArgumentException("ParametersWithSalt only valid for signing", "parameters");
+                    throw new ArgumentException("ParametersWithSalt only valid for signing", nameof(parameters));
 
-                ParametersWithSalt p = (ParametersWithSalt) parameters;
-
-                kParam = (RsaKeyParameters) p.Parameters;
-                standardSalt = p.GetSalt();
+                kParam = (RsaKeyParameters)withSalt.Parameters;
+                standardSalt = withSalt.GetSalt();
 
                 if (standardSalt.Length != saltLength)
                     throw new ArgumentException("Fixed salt is of wrong length");
             }
             else
             {
-                kParam = (RsaKeyParameters) parameters;
-
-                if (forSigning)
-                {
-                    random = new SecureRandom();
-                }
+                kParam = (RsaKeyParameters)parameters;
+                random = forSigning ? CryptoServicesRegistrar.GetSecureRandom() : null;
             }
 
             cipher.Init(forSigning, kParam);
@@ -331,28 +317,7 @@ namespace Org.BouncyCastle.Crypto.Signers
         }
 #endif
 
-        /// <summary> reset the internal state</summary>
-        public virtual void Reset()
-        {
-            digest.Reset();
-            messageLength = 0;
-            if (mBuf != null)
-            {
-                ClearBlock(mBuf);
-            }
-            if (recoveredMessage != null)
-            {
-                ClearBlock(recoveredMessage);
-                recoveredMessage = null;
-            }
-            fullMessage = false;
-            if (preSig != null)
-            {
-                preSig = null;
-                ClearBlock(preBlock);
-                preBlock = null;
-            }
-        }
+        public virtual int GetMaxSignatureSize() => cipher.GetOutputBlockSize();
 
         /// <summary> Generate a signature for the loaded message using the key we were
         /// initialised with.
@@ -539,6 +504,29 @@ namespace Org.BouncyCastle.Crypto.Signers
 
             ClearBlock(mBuf);
             return true;
+        }
+
+        /// <summary> reset the internal state</summary>
+        public virtual void Reset()
+        {
+            digest.Reset();
+            messageLength = 0;
+            if (mBuf != null)
+            {
+                ClearBlock(mBuf);
+            }
+            if (recoveredMessage != null)
+            {
+                ClearBlock(recoveredMessage);
+                recoveredMessage = null;
+            }
+            fullMessage = false;
+            if (preSig != null)
+            {
+                preSig = null;
+                ClearBlock(preBlock);
+                preBlock = null;
+            }
         }
 
         /// <summary>

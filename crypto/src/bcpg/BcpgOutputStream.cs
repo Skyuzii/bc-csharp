@@ -10,18 +10,16 @@ namespace Org.BouncyCastle.Bcpg
     public class BcpgOutputStream
         : BaseOutputStream
     {
-		internal static BcpgOutputStream Wrap(
-			Stream outStr)
+		internal static BcpgOutputStream Wrap(Stream outStr)
 		{
-			if (outStr is BcpgOutputStream)
-			{
-				return (BcpgOutputStream) outStr;
-			}
+			if (outStr is BcpgOutputStream bcpgOutputStream)
+				return bcpgOutputStream;
 
 			return new BcpgOutputStream(outStr);
 		}
 
 		private Stream outStr;
+        private bool useOldFormat;
         private byte[] partialBuffer;
         private int partialBufferLength;
         private int partialPower;
@@ -30,26 +28,28 @@ namespace Org.BouncyCastle.Bcpg
 
 		/// <summary>Create a stream representing a general packet.</summary>
 		/// <param name="outStr">Output stream to write to.</param>
-		public BcpgOutputStream(
-            Stream outStr)
+		public BcpgOutputStream(Stream outStr)
+            : this(outStr, false)
         {
-			if (outStr == null)
-				throw new ArgumentNullException("outStr");
-
-			this.outStr = outStr;
         }
 
-		/// <summary>Create a stream representing an old style partial object.</summary>
+        /// <summary>Base constructor specifying whether or not to use packets in the new format wherever possible.
+        /// </summary>
 		/// <param name="outStr">Output stream to write to.</param>
-		/// <param name="tag">The packet tag for the object.</param>
-        public BcpgOutputStream(
-            Stream		outStr,
-            PacketTag	tag)
+        /// <param name="newFormatOnly"><c>true</c> if use new format packets, <c>false</c> if backwards compatible
+        /// preferred.</param>
+        public BcpgOutputStream(Stream outStr, bool newFormatOnly)
         {
-			if (outStr == null)
-				throw new ArgumentNullException("outStr");
+            this.outStr = outStr ?? throw new ArgumentNullException(nameof(outStr));
+            this.useOldFormat = !newFormatOnly;
+        }
 
-			this.outStr = outStr;
+        /// <summary>Create a stream representing an old style partial object.</summary>
+        /// <param name="outStr">Output stream to write to.</param>
+        /// <param name="tag">The packet tag for the object.</param>
+        public BcpgOutputStream(Stream outStr, PacketTag tag)
+        {
+            this.outStr = outStr ?? throw new ArgumentNullException(nameof(outStr));
             this.WriteHeader(tag, true, true, 0);
         }
 
@@ -58,16 +58,9 @@ namespace Org.BouncyCastle.Bcpg
 		/// <param name="tag">Packet tag.</param>
 		/// <param name="length">Size of chunks making up the packet.</param>
 		/// <param name="oldFormat">If true, the header is written out in old format.</param>
-		public BcpgOutputStream(
-            Stream		outStr,
-            PacketTag	tag,
-            long		length,
-            bool		oldFormat)
+		public BcpgOutputStream(Stream outStr, PacketTag tag, long length, bool oldFormat)
         {
-			if (outStr == null)
-				throw new ArgumentNullException("outStr");
-
-			this.outStr = outStr;
+            this.outStr = outStr ?? throw new ArgumentNullException(nameof(outStr));
 
             if (length > 0xFFFFFFFFL)
             {
@@ -87,15 +80,9 @@ namespace Org.BouncyCastle.Bcpg
 		/// <param name="outStr">Output stream to write to.</param>
 		/// <param name="tag">Packet tag.</param>
 		/// <param name="length">Size of chunks making up the packet.</param>
-		public BcpgOutputStream(
-            Stream		outStr,
-            PacketTag	tag,
-            long		length)
+		public BcpgOutputStream(Stream outStr, PacketTag tag, long length)
         {
-			if (outStr == null)
-				throw new ArgumentNullException("outStr");
-
-            this.outStr = outStr;
+            this.outStr = outStr ?? throw new ArgumentNullException(nameof(outStr));
             this.WriteHeader(tag, false, false, length);
         }
 
@@ -103,15 +90,9 @@ namespace Org.BouncyCastle.Bcpg
 		/// <param name="outStr">Output stream to write to.</param>
 		/// <param name="tag">Packet tag.</param>
 		/// <param name="buffer">Buffer to use for collecting chunks.</param>
-        public BcpgOutputStream(
-            Stream		outStr,
-            PacketTag	tag,
-            byte[]		buffer)
+        public BcpgOutputStream(Stream outStr, PacketTag tag, byte[] buffer)
         {
-			if (outStr == null)
-				throw new ArgumentNullException("outStr");
-
-            this.outStr = outStr;
+            this.outStr = outStr ?? throw new ArgumentNullException(nameof(outStr));
             this.WriteHeader(tag, false, true, 0);
 
 			this.partialBuffer = buffer;
@@ -123,15 +104,13 @@ namespace Org.BouncyCastle.Bcpg
             }
 
 			if (partialPower > 30)
-            {
                 throw new IOException("Buffer cannot be greater than 2^30 in length.");
-            }
+
             this.partialBufferLength = 1 << partialPower;
             this.partialOffset = 0;
         }
 
-		private void WriteNewPacketLength(
-            long bodyLen)
+		private void WriteNewPacketLength(long bodyLen)
         {
             if (bodyLen < 192)
             {
@@ -164,7 +143,7 @@ namespace Org.BouncyCastle.Bcpg
 
             if (partialBuffer != null)
             {
-                PartialFlush(true);
+                PartialFlushLast();
                 partialBuffer = null;
             }
 
@@ -215,19 +194,26 @@ namespace Org.BouncyCastle.Bcpg
             }
         }
 
-        private void PartialFlush(bool isLast)
+        private void PartialFlush()
         {
-            if (isLast)
-            {
-                WriteNewPacketLength(partialOffset);
-                outStr.Write(partialBuffer, 0, partialOffset);
-            }
-            else
-            {
-                outStr.WriteByte((byte)(0xE0 | partialPower));
-                outStr.Write(partialBuffer, 0, partialBufferLength);
-            }
+            outStr.WriteByte((byte)(0xE0 | partialPower));
+            outStr.Write(partialBuffer, 0, partialBufferLength);
+            partialOffset = 0;
+        }
 
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        private void PartialFlush(ref ReadOnlySpan<byte> buffer)
+        {
+            outStr.WriteByte((byte)(0xE0 | partialPower));
+            outStr.Write(buffer[..partialBufferLength]);
+            buffer = buffer[partialBufferLength..];
+        }
+#endif
+
+        private void PartialFlushLast()
+        {
+            WriteNewPacketLength(partialOffset);
+            outStr.Write(partialBuffer, 0, partialOffset);
             partialOffset = 0;
         }
 
@@ -235,40 +221,71 @@ namespace Org.BouncyCastle.Bcpg
         {
             Streams.ValidateBufferArguments(buffer, offset, count);
 
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            PartialWrite(buffer.AsSpan(offset, count));
+#else
             if (partialOffset == partialBufferLength)
             {
-                PartialFlush(false);
+                PartialFlush();
             }
 
             if (count <= (partialBufferLength - partialOffset))
             {
                 Array.Copy(buffer, offset, partialBuffer, partialOffset, count);
                 partialOffset += count;
+                return;
             }
-            else
+
+            int diff = partialBufferLength - partialOffset;
+            Array.Copy(buffer, offset, partialBuffer, partialOffset, diff);
+            offset += diff;
+            count -= diff;
+            PartialFlush();
+            while (count > partialBufferLength)
             {
-                int diff = partialBufferLength - partialOffset;
-                Array.Copy(buffer, offset, partialBuffer, partialOffset, diff);
-                offset += diff;
-                count -= diff;
-                PartialFlush(false);
-                while (count > partialBufferLength)
-                {
-                    Array.Copy(buffer, offset, partialBuffer, 0, partialBufferLength);
-                    offset += partialBufferLength;
-                    count -= partialBufferLength;
-                    PartialFlush(false);
-                }
-                Array.Copy(buffer, offset, partialBuffer, 0, count);
-                partialOffset += count;
+                Array.Copy(buffer, offset, partialBuffer, 0, partialBufferLength);
+                offset += partialBufferLength;
+                count -= partialBufferLength;
+                PartialFlush();
             }
+            Array.Copy(buffer, offset, partialBuffer, 0, count);
+            partialOffset = count;
+#endif
         }
+
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        private void PartialWrite(ReadOnlySpan<byte> buffer)
+        {
+            if (partialOffset == partialBufferLength)
+            {
+                PartialFlush();
+            }
+
+            if (buffer.Length <= (partialBufferLength - partialOffset))
+            {
+                buffer.CopyTo(partialBuffer.AsSpan(partialOffset));
+                partialOffset += buffer.Length;
+                return;
+            }
+
+            int diff = partialBufferLength - partialOffset;
+            buffer[..diff].CopyTo(partialBuffer.AsSpan(partialOffset));
+            buffer = buffer[diff..];
+            PartialFlush();
+            while (buffer.Length > partialBufferLength)
+            {
+                PartialFlush(ref buffer);
+            }
+            buffer.CopyTo(partialBuffer);
+            partialOffset = buffer.Length;
+        }
+#endif
 
         private void PartialWriteByte(byte value)
         {
             if (partialOffset == partialBufferLength)
             {
-                PartialFlush(false);
+                PartialFlush();
             }
 
             partialBuffer[partialOffset++] = value;
@@ -285,6 +302,20 @@ namespace Org.BouncyCastle.Bcpg
                 outStr.Write(buffer, offset, count);
             }
         }
+
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            if (partialBuffer != null)
+            {
+                PartialWrite(buffer);
+            }
+            else
+            {
+                outStr.Write(buffer);
+            }
+        }
+#endif
 
         public override void WriteByte(byte value)
         {
@@ -329,29 +360,28 @@ namespace Org.BouncyCastle.Bcpg
 				(byte)n);
 		}
 
-		public void WritePacket(
-            ContainedPacket p)
+		public void WritePacket(ContainedPacket p)
         {
             p.Encode(this);
         }
 
-        internal void WritePacket(
-            PacketTag	tag,
-            byte[]		body,
-            bool		oldFormat)
+        internal void WritePacket(PacketTag tag, byte[] body)
+        {
+            WritePacket(tag, body, useOldFormat);
+        }
+
+        internal void WritePacket(PacketTag tag, byte[] body, bool oldFormat)
         {
             this.WriteHeader(tag, oldFormat, false, body.Length);
             this.Write(body);
         }
 
-		public void WriteObject(
-            BcpgObject bcpgObject)
+		public void WriteObject(BcpgObject bcpgObject)
         {
             bcpgObject.Encode(this);
         }
 
-		public void WriteObjects(
-			params BcpgObject[] v)
+		public void WriteObjects(params BcpgObject[] v)
 		{
 			foreach (BcpgObject o in v)
 			{
@@ -370,7 +400,7 @@ namespace Org.BouncyCastle.Bcpg
         {
             if (partialBuffer != null)
             {
-                PartialFlush(true);
+                PartialFlushLast();
                 Array.Clear(partialBuffer, 0, partialBuffer.Length);
                 partialBuffer = null;
             }
@@ -382,7 +412,7 @@ namespace Org.BouncyCastle.Bcpg
             {
 			    this.Finish();
 			    outStr.Flush();
-                Platform.Dispose(outStr);
+                outStr.Dispose();
             }
             base.Dispose(disposing);
         }

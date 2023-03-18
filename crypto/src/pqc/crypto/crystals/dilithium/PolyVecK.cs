@@ -1,24 +1,21 @@
-﻿using System;
-
-namespace Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium
+﻿namespace Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium
 {
     internal class PolyVecK
     {
-        public Poly[] Vec;
-        private DilithiumEngine Engine;
-        private int Mode;
-        private int PolyVecBytes;
-        private int K;
-        private int L;
+        public readonly Poly[] Vec;
+        private readonly DilithiumEngine Engine;
+        //private readonly int Mode;
+        private readonly int K;
+        //private readonly int L;
 
         public PolyVecK(DilithiumEngine Engine)
         {
             this.Engine = Engine;
-            Mode = Engine.Mode;
+            //Mode = Engine.Mode;
             K = Engine.K;
-            L = Engine.L;
+            //L = Engine.L;
             Vec = new Poly[K];
-            
+
             for (int i = 0; i < K; i++)
             {
                 Vec[i] = new Poly(Engine);
@@ -27,9 +24,8 @@ namespace Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium
 
         public void UniformEta(byte[] seed, ushort nonce)
         {
-            int i;
             ushort n = nonce;
-            for (i = 0; i < K; i++)
+            for (int i = 0; i < K; i++)
             {
                 Vec[i].UniformEta(seed, n++);
             }
@@ -101,8 +97,7 @@ namespace Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium
 
         public void PackW1(byte[] r)
         {
-            int i;
-            for (i = 0; i < K; i++)
+            for (int i = 0; i < K; i++)
             {
                 Vec[i].PackW1(r, i * Engine.PolyW1PackedBytes);
             }
@@ -121,21 +116,18 @@ namespace Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium
             for (int i = 0; i < K; ++i)
             {
                 if (Vec[i].CheckNorm(bound))
-                {
                     return true;
-                }
             }
             return false;
         }
 
         public int MakeHint(PolyVecK v0, PolyVecK v1)
         {
-            int i, s = 0;
-            for (i = 0; i < K; ++i)
+            int s = 0;
+            for (int i = 0; i < K; ++i)
             {
                 s += Vec[i].PolyMakeHint(v0.Vec[i], v1.Vec[i]);
             }
-
             return s;
         }
 
@@ -154,6 +146,5 @@ namespace Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium
                 Vec[i].ShiftLeft();
             }
         }
-
     }
 }

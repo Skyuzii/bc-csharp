@@ -41,15 +41,6 @@ namespace Org.BouncyCastle.Tls.Tests
             get { return true; }
         }
 
-        public override void Close()
-        {
-            lock (this)
-            {
-                m_closed = true;
-                Monitor.PulseAll(this);
-            }
-        }
-
         public override void Flush()
         {
         }
@@ -117,10 +108,25 @@ namespace Org.BouncyCastle.Tls.Tests
             }
         }
 
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                lock (this)
+                {
+                    if (!m_closed)
+                    {
+                        m_closed = true;
+                        Monitor.PulseAll(this);
+                    }
+                }
+            }
+        }
+
         private void CheckOpen()
         {
             if (m_closed)
-                throw new ObjectDisposedException(this.GetType().Name);
+                throw new ObjectDisposedException(GetType().FullName);
         }
 
         private void WaitForData()
